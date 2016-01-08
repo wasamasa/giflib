@@ -1,0 +1,7 @@
+(compile -s -O3 -d1 "giflib.scm" -j giflib -lgif)
+(compile -s "giflib.import.scm")
+
+(install-extension
+ 'giflib
+ '("giflib.so" "giflib.import.so")
+ '((version "0.0")))

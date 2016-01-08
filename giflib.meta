@@ -1,0 +1,5 @@
+((synopsis "Bindings to giflib")
+ (author "Vasilij Schneidermann")
+ (license "BSD")
+ (category graphics)
+ (foreign-depends "giflib-5.0"))

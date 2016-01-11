@@ -7,7 +7,7 @@
 
 (import chicken scheme foreign)
 
-(foreign-declare "#include \"gif_lib.h\"")
+(foreign-declare "#include <gif_lib.h>")
 
 (define-record gif pointer)
 (define-record frame pointer)

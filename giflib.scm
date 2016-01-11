@@ -1,14 +1,16 @@
 (module giflib
   (open-gif gif? slurp-gif close-gif
    gif-width gif-height gif-resolution gif-bg-color
-   gif-color-map color-map? color-map-count color-map-resolution
-   color-map-ref color? color-red color-green color-blue)
+   gif-color-map color-map? color-map-resolution
+   color-map-count color-map-ref color? color-red color-green color-blue
+   gif-frame-count gif-frame-ref frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel)
 
 (import chicken scheme foreign)
 
 (foreign-declare "#include \"gif_lib.h\"")
 
 (define-record gif pointer)
+(define-record frame pointer)
 (define-record color-map pointer)
 (define-record color red green blue)
 
@@ -25,6 +27,17 @@
     (make-property-condition
      'giflib
      'code status))))
+
+(define (oob-error index count)
+  (abort
+   (make-composite-condition
+    (make-property-condition
+     'exn
+     'message (format "Out of bounds: ~a / ~a" index count))
+    (make-property-condition
+     'bounds))))
+
+;; TODO: check for int/char types
 
 ;; TODO: find some way to clean up repetitive code
 (define (close-gif gif)
@@ -88,7 +101,8 @@
   (let ((gif* (gif-pointer gif)))
     (when gif*
       (let ((color-map* ((foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "GifFileType")) gif))
-                                          "C_return(gif->SColorMap);")
+                                          "struct ColorMapObject *colormap = gif->SColorMap;
+                                           if(colormap) C_return(&colormap); else C_return(false);")
                          gif*)))
         (if color-map*
             (make-color-map color-map*)
@@ -117,23 +131,106 @@
         (if (and (>= index 0) (< index count))
             (let ((red ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
                                               (int i))
-                                            "C_return(colormap->Colors[i].Red);")
+                                         "C_return(colormap->Colors[i].Red);")
                            color-map* index))
                   (green ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
-                                              (int i))
-                                            "C_return(colormap->Colors[i].Green);")
+                                                (int i))
+                                           "C_return(colormap->Colors[i].Green);")
                            color-map* index))
                   (blue ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
-                                              (int i))
-                                            "C_return(colormap->Colors[i].Blue);")
+                                               (int i))
+                                          "C_return(colormap->Colors[i].Blue);")
                            color-map* index)))
               (make-color red green blue))
-            (abort
-             (make-composite-condition
-              (make-property-condition
-               'exn
-               'message "Out of bounds")
-              (make-property-condition
-               'bounds))))))))
+            (oob-error index count))))))
+
+(define (gif-frame-count gif)
+  (let ((gif* (gif-pointer gif)))
+    (when gif*
+      ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                        "C_return(gif->ImageCount);")
+       gif*))))
+
+(define (gif-frame-ref gif index)
+  (let ((gif* (gif-pointer gif)))
+    (when gif*
+      (let ((count ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                                     "C_return(gif->ImageCount);")
+                    gif*)))
+        (if (and (>= index 0) (< index count))
+            (let ((frame* ((foreign-lambda* (c-pointer (struct "SavedImage")) (((c-pointer (struct "GifFileType")) gif)
+                                                                               (int i))
+                                            "C_return(&(gif->SavedImages[i]));")
+                           gif* index)))
+              (if frame*
+                  (make-frame frame*)
+                  #f))
+            (oob-error index count))))))
+
+(define (frame-width frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                        "C_return(frame->ImageDesc.Width);")
+       frame*))))
+
+(define (frame-height frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                        "C_return(frame->ImageDesc.Height);")
+       frame*))))
+
+(define (frame-left frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                        "C_return(frame->ImageDesc.Left);")
+       frame*))))
+
+(define (frame-top frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                        "C_return(frame->ImageDesc.Top);")
+       frame*))))
+
+(define (frame-interlaced? frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      ((foreign-lambda* bool (((c-pointer (struct "SavedImage")) frame))
+                        "C_return(frame->ImageDesc.Interlace);")
+       frame*))))
+
+(define (frame-color-map frame)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      (let ((color-map* ((foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "SavedImage")) frame))
+                                          "struct ColorMapObject *colormap = frame->ImageDesc.ColorMap;
+                                           if(colormap) C_return(&colormap); else C_return(false);")
+                         frame*)))
+        (if color-map*
+            (make-color-map color-map*)
+            #f)))))
+
+;; TODO: go for more intuitive semantics?
+(define (frame-pixel frame x y)
+  (let ((frame* (frame-pointer frame)))
+    (when frame*
+      (let ((width ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                                     "C_return(frame->ImageDesc.Width);")
+                    frame*))
+            (height ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                                      "C_return(frame->ImageDesc.Height);")
+                     frame*)))
+        (if (and (>= x 0) (>= y 0)
+                 (< x width) (< y height))
+            ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)
+                                   (int width)
+                                   (int x)
+                                   (int y))
+                              "C_return(frame->RasterBits[y*width+x]);")
+             frame* width x y)
+            (oob-error (format "~a|~a" x y) (format "~a:~a" width height)))))))
 
 )

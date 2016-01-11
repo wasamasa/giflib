@@ -17,22 +17,24 @@
 (define GIF-ERROR (foreign-value "GIF_ERROR" bool))
 (define GIF-OK (foreign-value "GIF_OK" bool))
 
-(define (gif-error status)
+(define (gif-error status location)
   (abort
    (make-composite-condition
     (make-property-condition
      'exn
+     'location location
      'message ((foreign-lambda c-string "GifErrorString" int)
                status))
     (make-property-condition
      'giflib
      'code status))))
 
-(define (oob-error index count)
+(define (oob-error index count location)
   (abort
    (make-composite-condition
     (make-property-condition
      'exn
+     'location location
      'message (format "Out of bounds: ~a / ~a" index count))
     (make-property-condition
      'bounds))))
@@ -45,7 +47,7 @@
         (let ((ret ((foreign-lambda int "DGifCloseFile" (c-pointer (struct "GifFileType")) (c-pointer int))
                     gif* (location status))))
           (when (= ret GIF-ERROR)
-            (gif-error status))))
+            (gif-error status 'close-gif))))
       (gif-pointer-set! gif #f))))
 
 (define (open-gif filename)
@@ -54,7 +56,7 @@
                  filename (location status))))
       (if gif*
           (set-finalizer! (make-gif gif*) close-gif)
-          (gif-error status)))))
+          (gif-error status 'open-gif)))))
 
 (define (slurp-gif gif)
   (let ((gif* (gif-pointer gif)))
@@ -65,7 +67,7 @@
           (let ((status ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
                                           "C_return(gif->Error);")
                          gif*)))
-            (gif-error status)))))))
+            (gif-error status 'slurp-gif)))))))
 
 (define (gif-width gif)
   (let ((gif* (gif-pointer gif)))
@@ -140,7 +142,7 @@
                                           "C_return(colormap->Colors[i].Blue);")
                            color-map* index)))
               (make-color red green blue))
-            (oob-error index count))))))
+            (oob-error index count 'color-map-ref))))))
 
 (define (gif-frame-count gif)
   (let ((gif* (gif-pointer gif)))
@@ -163,7 +165,7 @@
               (if frame*
                   (make-frame frame*)
                   #f))
-            (oob-error index count))))))
+            (oob-error index count 'gif-frame-ref))))))
 
 (define (frame-width frame)
   (let ((frame* (frame-pointer frame)))
@@ -229,6 +231,6 @@
                                    (int y))
                               "C_return(frame->RasterBits[y*width+x]);")
              frame* width x y)
-            (oob-error (format "~a|~a" x y) (format "~a:~a" width height)))))))
+            (oob-error (format "~a|~a" x y) (format "~a:~a" width height) 'frame-pixel))))))
 
 )

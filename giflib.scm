@@ -14,8 +14,8 @@
 (define-record color-map pointer)
 (define-record color red green blue)
 
-(define GIF-ERROR (foreign-value "GIF_ERROR" int))
-(define GIF-OK (foreign-value "GIF_OK" int))
+(define GIF-ERROR (foreign-value "GIF_ERROR" bool))
+(define GIF-OK (foreign-value "GIF_OK" bool))
 
 (define (gif-error status)
   (abort
@@ -36,8 +36,6 @@
      'message (format "Out of bounds: ~a / ~a" index count))
     (make-property-condition
      'bounds))))
-
-;; TODO: check for int/char types
 
 ;; TODO: find some way to clean up repetitive code
 (define (close-gif gif)
@@ -129,16 +127,16 @@
                                      "C_return(colormap->ColorCount);")
                     color-map*)))
         (if (and (>= index 0) (< index count))
-            (let ((red ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
-                                              (int i))
+            (let ((red ((foreign-lambda* byte (((c-pointer (struct "ColorMapObject")) colormap)
+                                               (int i))
                                          "C_return(colormap->Colors[i].Red);")
                            color-map* index))
-                  (green ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
-                                                (int i))
+                  (green ((foreign-lambda* byte (((c-pointer (struct "ColorMapObject")) colormap)
+                                                 (int i))
                                            "C_return(colormap->Colors[i].Green);")
                            color-map* index))
-                  (blue ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
-                                               (int i))
+                  (blue ((foreign-lambda* byte (((c-pointer (struct "ColorMapObject")) colormap)
+                                                (int i))
                                           "C_return(colormap->Colors[i].Blue);")
                            color-map* index)))
               (make-color red green blue))

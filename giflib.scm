@@ -1,12 +1,16 @@
 (module giflib
-  (open-gif slurp-gif close-gif
-   gif-width gif-height)
+  (open-gif gif? slurp-gif close-gif
+   gif-width gif-height gif-resolution gif-bg-color
+   gif-color-map color-map? color-map-count color-map-resolution
+   color-map-ref color? color-red color-green color-blue)
 
 (import chicken scheme foreign)
 
 (foreign-declare "#include \"gif_lib.h\"")
 
 (define-record gif pointer)
+(define-record color-map pointer)
+(define-record color red green blue)
 
 (define GIF-ERROR (foreign-value "GIF_ERROR" int))
 (define GIF-OK (foreign-value "GIF_OK" int))
@@ -65,4 +69,71 @@
       ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
                         "C_return(gif->SHeight);")
        gif*))))
+
+(define (gif-resolution gif)
+  (let ((gif* (gif-pointer gif)))
+    (when gif*
+      ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                        "C_return(gif->SColorResolution);")
+       gif*))))
+
+(define (gif-bg-color gif)
+  (let ((gif* (gif-pointer gif)))
+    (when gif*
+      ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                        "C_return(gif->SBackGroundColor);")
+       gif*))))
+
+(define (gif-color-map gif)
+  (let ((gif* (gif-pointer gif)))
+    (when gif*
+      (let ((color-map* ((foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "GifFileType")) gif))
+                                          "C_return(gif->SColorMap);")
+                         gif*)))
+        (if color-map*
+            (make-color-map color-map*)
+            #f)))))
+
+(define (color-map-count color-map)
+  (let ((color-map* (color-map-pointer color-map)))
+    (when color-map*
+      ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap))
+                        "C_return(colormap->ColorCount);")
+       color-map*))))
+
+(define (color-map-resolution color-map)
+  (let ((color-map* (color-map-pointer color-map)))
+    (when color-map*
+      ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap))
+                        "C_return(colormap->BitsPerPixel);")
+       color-map*))))
+
+(define (color-map-ref color-map index)
+  (let ((color-map* (color-map-pointer color-map)))
+    (when color-map*
+      (let ((count ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap))
+                                     "C_return(colormap->ColorCount);")
+                    color-map*)))
+        (if (and (>= index 0) (< index count))
+            (let ((red ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
+                                              (int i))
+                                            "C_return(colormap->Colors[i].Red);")
+                           color-map* index))
+                  (green ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
+                                              (int i))
+                                            "C_return(colormap->Colors[i].Green);")
+                           color-map* index))
+                  (blue ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) colormap)
+                                              (int i))
+                                            "C_return(colormap->Colors[i].Blue);")
+                           color-map* index)))
+              (make-color red green blue))
+            (abort
+             (make-composite-condition
+              (make-property-condition
+               'exn
+               'message "Out of bounds")
+              (make-property-condition
+               'bounds))))))))
+
 )

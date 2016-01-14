@@ -14,8 +14,8 @@
 (define-record color-map pointer)
 (define-record color red green blue)
 
-(define GIF-ERROR (foreign-value "GIF_ERROR" bool))
-(define GIF-OK (foreign-value "GIF_OK" bool))
+(define GIF-ERROR (foreign-value "GIF_ERROR" byte))
+(define GIF-OK (foreign-value "GIF_OK" byte))
 
 (define (gif-error status location)
   (abort
@@ -23,7 +23,7 @@
     (make-property-condition
      'exn
      'location location
-     'message ((foreign-lambda c-string "GifErrorString" int)
+     'message ((foreign-lambda c-string "GifErrorString" byte)
                status))
     (make-property-condition
      'giflib

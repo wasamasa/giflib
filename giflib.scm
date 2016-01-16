@@ -152,7 +152,7 @@
   (and-let* ((gif* (gif-pointer gif)))
     (let ((color-map* ((foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "GifFileType")) gif))
                                         "struct ColorMapObject *colormap = gif->SColorMap;
-                                         if(colormap) C_return(&colormap); else C_return(0);")
+                                         if(colormap) C_return(colormap); else C_return(false);")
                        gif*)))
       (if color-map*
           (make-color-map color-map*)
@@ -281,7 +281,7 @@
   (and-let* ((frame* (frame-pointer frame)))
     (let ((color-map* ((foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "SavedImage")) frame))
                                         "struct ColorMapObject *colormap = frame->ImageDesc.ColorMap;
-                                         if(colormap) C_return(&colormap); else C_return(false);")
+                                         if(colormap) C_return(colormap); else C_return(false);")
                        frame*)))
       (if color-map*
           (make-color-map color-map*)

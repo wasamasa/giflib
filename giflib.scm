@@ -6,12 +6,11 @@
    gif-extension-block-count gif-extension-block-ref
    gif-frame-count gif-frame-ref frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel
    frame-extension-block-count frame-extension-block-ref
-   extension-block? extension-block-type extension-block->u8vector
-   extension-block->sub-block sub-block? sub-block-id sub-block-data
-   extension-block->comment-block comment-block? comment-block-text
-   extension-block->graphics-control-block graphics-control-block? graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
-   extension-block->text-block text-block? text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
-   extension-block->application-block application-block? application-block-identifier application-block-auth-code)
+   sub-block? sub-block-id sub-block-data
+   comment-block? comment-block-text
+   graphics-control-block? graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
+   text-block? text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
+   application-block? application-block-identifier application-block-auth-code)
 
 (import chicken scheme foreign)
 (use srfi-4 bitstring)
@@ -231,20 +230,24 @@
                  (function ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
                                              "C_return(extension_block->Function);")
                             extension-block*))
-                 (type (select function
-                         ((CONTINUE-EXT-FUNC-CODE) 'sub-block)
-                         ((COMMENT-EXT-FUNC-CODE) 'comment-block)
-                         ((GRAPHICS-EXT-FUNC-CODE) 'graphics-control-block)
-                         ((PLAINTEXT-EXT-FUNC-CODE) 'text-block)
-                         ((APPLICATION-EXT-FUNC-CODE) 'application-block)
-                         (else (unknown-extension-block-error 'gif-extension-block-ref))))
                  (data-length ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
                                                 "C_return(extension_block->ByteCount);")
                                extension-block*))
                  (data-pointer ((foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block))
                                                  "C_return(extension_block->Bytes);")
-                                extension-block*)))
-             (make-extension-block extension-block* type data-length data-pointer))
+                                extension-block*))
+                 (data (make-u8vector data-length 0)))
+            ((foreign-lambda* void ((u8vector dest)
+                                    ((c-pointer unsigned-byte) src)
+                                    (int size))
+                              "memcpy(dest, src, size * sizeof(unsigned char));")
+             data data-pointer data-length)
+            (select function
+              ((CONTINUE-EXT-FUNC-CODE) (data->sub-block data))
+              ((COMMENT-EXT-FUNC-CODE) (data->comment-block data))
+              ((GRAPHICS-EXT-FUNC-CODE) (data->graphics-control-block data))
+              ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
+              ((APPLICATION-EXT-FUNC-CODE) (data->application-block data))))
           (oob-error index count 'gif-extension-block-ref)))))
 
 (define (frame-width frame)
@@ -306,20 +309,24 @@
                  (function ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
                                              "C_return(extension_block->Function);")
                             extension-block*))
-                 (type (select function
-                         ((CONTINUE-EXT-FUNC-CODE) 'sub-block)
-                         ((COMMENT-EXT-FUNC-CODE) 'comment-block)
-                         ((GRAPHICS-EXT-FUNC-CODE) 'graphics-control-block)
-                         ((PLAINTEXT-EXT-FUNC-CODE) 'text-block)
-                         ((APPLICATION-EXT-FUNC-CODE) 'application-block)
-                         (else (unknown-extension-block-error 'frame-extension-block-ref))))
                  (data-length ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
                                                 "C_return(extension_block->ByteCount);")
                                extension-block*))
                  (data-pointer ((foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block))
                                                  "C_return(extension_block->Bytes);")
-                                extension-block*)))
-             (make-extension-block extension-block* type data-length data-pointer))
+                                extension-block*))
+                 (data (make-u8vector data-length 0)))
+            ((foreign-lambda* void ((u8vector dest)
+                                    ((c-pointer unsigned-byte) src)
+                                    (int size))
+                              "memcpy(dest, src, size * sizeof(unsigned char));")
+             data data-pointer data-length)
+            (select function
+              ((CONTINUE-EXT-FUNC-CODE) (data->sub-block data))
+              ((COMMENT-EXT-FUNC-CODE) (data->comment-block data))
+              ((GRAPHICS-EXT-FUNC-CODE) (data->graphics-control-block data))
+              ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
+              ((APPLICATION-EXT-FUNC-CODE) (data->application-block data))))
           (oob-error index count 'frame-extension-block-ref)))))
 
 ;; TODO: implement gif-frame-fold with more intuitive semantics
@@ -346,76 +353,54 @@
 ;; (define (frame-pixel-rect frame x y width height) ...)
 ;; (define (frame-pixels frame) ...)
 
-(define (extension-block->u8vector extension-block)
-  (and-let* ((extension-block* (extension-block-pointer extension-block)))
-    (let* ((data-pointer (extension-block-data-pointer extension-block))
-           (data-length (extension-block-data-length extension-block))
-           (data (make-u8vector data-length 0)))
-      ((foreign-lambda* void ((u8vector dest)
-                              ((c-pointer unsigned-byte) src)
-                              (int size))
-                        "memcpy(dest, src, size * sizeof(unsigned char));")
-       data data-pointer data-length)
-      data)))
+(define (data->sub-block data)
+  (bitmatch data
+    (((id 8 little)
+      (data bitstring))
+     (make-sub-block id (bitstring->u8vector data 8)))
+    (else (unpack-error 'extension-block->sub-block))))
 
-;; TODO: error out on unexpected extension block type?
-(define (extension-block->sub-block extension-block)
-  (and-let* ((data (extension-block->u8vector extension-block)))
-    (bitmatch data
-      (((id 8 little)
-        (data bitstring))
-       (make-sub-block id (bitstring->u8vector data 8)))
-      (else
-       (unpack-error 'extension-block->sub-block)))))
+(define (data->comment-block data)
+  (make-comment-block (blob->string (u8vector->blob data))))
 
-(define (extension-block->comment-block extension-block)
-  (and-let* ((data (extension-block->u8vector extension-block)))
-    (make-comment-block (blob->string (u8vector->blob data)))))
+(define (data->graphics-control-block data)
+  (bitmatch data
+    (((reserved 3 little)
+      (disposal 3 little)
+      (user-input? 1 boolean little)
+      (transparency-index? 1 boolean little)
+      (delay-time (* 2 8) little) ; hundredths of seconds
+      (transparency-index 8 little)) ; index
+     (make-graphics-control-block
+      (select disposal
+        ((DISPOSAL-UNSPECIFIED) 'unspecified)
+        ((DISPOSE-DO-NOT) 'none)
+        ((DISPOSE-BACKGROUND) 'background)
+        ((DISPOSE-PREVIOUS) 'previous)
+        (else (unknown-disposal-error 'extension-block->graphics-control-block)))
+      user-input? delay-time (and transparency-index? transparency-index)))
+    (else (unpack-error 'extension-block->graphics-control-block))))
 
-(define (extension-block->graphics-control-block extension-block)
-  (and-let* ((data (extension-block->u8vector extension-block)))
-    (bitmatch data
-      (((reserved 3 little)
-        (disposal 3 little)
-        (user-input? 1 boolean little)
-        (transparency-index? 1 boolean little)
-        (delay-time (* 2 8) little) ; hundredths of seconds
-        (transparency-index 8 little)) ; index
-       (make-graphics-control-block
-        (select disposal
-          ((DISPOSAL-UNSPECIFIED) 'unspecified)
-          ((DISPOSE-DO-NOT) 'none)
-          ((DISPOSE-BACKGROUND) 'background)
-          ((DISPOSE-PREVIOUS) 'previous)
-          (else (unknown-disposal-error 'extension-block->graphics-control-block)))
-        user-input? delay-time (and transparency-index? transparency-index)))
-      (else
-       (unpack-error 'extension-block->graphics-control-block)))))
+(define (data->text-block data)
+  (bitmatch data
+    (((grid-left (* 2 8) little)
+      (grid-top (* 2 8) little)
+      (grid-width (* 2 8) little)
+      (grid-height (* 2 8) little)
+      (cell-width 8 little)
+      (cell-height 8 little)
+      (fg-index 8 little)
+      (bg-index 8 little))
+     (make-text-block grid-left grid-top grid-width grid-height
+                      cell-width cell-height fg-index bg-index))
+    (else (unpack-error 'extension-block->text-block))))
 
-(define (extension-block->text-block extension-block)
-  (and-let* ((data (extension-block->u8vector extension-block)))
-    (bitmatch data
-      (((grid-left (* 2 8) little)
-        (grid-top (* 2 8) little)
-        (grid-width (* 2 8) little)
-        (grid-height (* 2 8) little)
-        (cell-width 8 little)
-        (cell-height 8 little)
-        (fg-index 8 little)
-        (bg-index 8 little))
-       (make-text-block grid-left grid-top grid-width grid-height
-                        cell-width cell-height fg-index bg-index))
-      (else
-       (unpack-error 'extension-block->text-block)))))
-
-(define (extension-block->application-block extension-block)
-  (and-let* ((data (extension-block->u8vector extension-block)))
-    (bitmatch data
-      (((identifier (* 8 8) bitstring)
-        (auth-code (* 3 8) bitstring))
-       (make-application-block (bitstring->string identifier)
-                               (bitstring->string auth-code)))
-      (else
-       (unpack-error 'extension-block->application-block)))))
+(define (data->application-block data)
+  (bitmatch data
+    (((identifier (* 8 8) bitstring)
+      (auth-code (* 3 8) bitstring))
+     (make-application-block (bitstring->string identifier)
+                             (bitstring->string auth-code)))
+    (else (unpack-error 'extension-block->application-block))))
 
 )

@@ -2,10 +2,12 @@
   (open-gif gif? slurp-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index
    gif-color-map color-map? color-map-resolution
-   color-map-count color-map-ref color? color-red color-green color-blue
-   gif-extension-block-count gif-extension-block-ref
-   gif-frame-count gif-frame-ref frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel
-   frame-extension-block-count frame-extension-block-ref
+   color-map-count color-map-ref color-map-for-each color-map-for-each-indexed
+   color? color-red color-green color-blue
+   gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
+   gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
+   frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel
+   frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
    sub-block? sub-block-id sub-block-data
    comment-block? comment-block-text
    graphics-control-block? graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
@@ -190,6 +192,33 @@
             (make-color red green blue))
           (oob-error index count 'color-map-ref)))))
 
+(define (color-map-for-each proc color-map)
+  (color-map-for-each-indexed
+   (lambda (color i) (proc color))
+   color-map))
+
+(define (color-map-for-each-indexed proc color-map)
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (let ((count ((foreign-lambda* int (((c-pointer (struct "ColorMapObject")) color_map))
+                                   "C_return(color_map->ColorCount);")
+                  color-map*)))
+      (let loop ((i 0))
+        (when (< i count)
+          (let ((red ((foreign-lambda* unsigned-byte (((c-pointer (struct "ColorMapObject")) color_map)
+                                                      (int i))
+                                       "C_return(color_map->Colors[i].Red);")
+                      color-map* i))
+                (green ((foreign-lambda* unsigned-byte (((c-pointer (struct "ColorMapObject")) color_map)
+                                                        (int i))
+                                         "C_return(color_map->Colors[i].Green);")
+                        color-map* i))
+                (blue ((foreign-lambda* unsigned-byte (((c-pointer (struct "ColorMapObject")) color_map)
+                                                       (int i))
+                                        "C_return(color_map->Colors[i].Blue);")
+                       color-map* i)))
+            (proc (make-color red green blue) i)
+            (loop (add1 i))))))))
+
 (define (gif-frame-count gif)
   (and-let* ((gif* (gif-pointer gif)))
     ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
@@ -206,10 +235,27 @@
                                                                              (int i))
                                           "C_return(&(gif->SavedImages[i]));")
                          gif* index)))
-            (if frame*
-                (make-frame frame*)
-                #f))
+            (make-frame frame*))
           (oob-error index count 'gif-frame-ref)))))
+
+(define (gif-frame-for-each proc gif)
+  (gif-frame-for-each-indexed
+   (lambda (frame i) (proc frame))
+   gif))
+
+(define (gif-frame-for-each-indexed proc gif)
+  (and-let* ((gif* (gif-pointer gif)))
+    (let ((count ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                                   "C_return(gif->ImageCount);")
+                  gif*)))
+      (let loop ((i 0))
+        (when (< i count)
+          (let ((frame* ((foreign-lambda* (c-pointer (struct "SavedImage")) (((c-pointer (struct "GifFileType")) gif)
+                                                                             (int i))
+                                          "C_return(&(gif->SavedImages[i]));")
+                         gif* i)))
+            (proc (make-frame frame*) i)
+            (loop (add1 i))))))))
 
 (define (gif-extension-block-count gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -249,6 +295,47 @@
               ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
               ((APPLICATION-EXT-FUNC-CODE) (data->application-block data))))
           (oob-error index count 'gif-extension-block-ref)))))
+
+(define (gif-extension-block-for-each proc gif)
+  (gif-extension-block-for-each-indexed
+   (lambda (extension-block i) (proc extension-block))
+   gif))
+
+(define (gif-extension-block-for-each-indexed proc gif)
+  (and-let* ((gif* (gif-pointer gif)))
+    (let ((count ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
+                                   "C_return(gif->ExtensionBlockCount);")
+                  gif*)))
+      (let loop ((i 0))
+        (when (< i count)
+          (let* ((extension-block* ((foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "GifFileType")) gif)
+                                                                                            (int i))
+                                                     "C_return(&(gif->ExtensionBlocks[i]));")
+                                    gif* i))
+                 (function ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                             "C_return(extension_block->Function);")
+                            extension-block*))
+                 (data-length ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                                "C_return(extension_block->ByteCount);")
+                               extension-block*))
+                 (data-pointer ((foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                                 "C_return(extension_block->Bytes);")
+                                extension-block*))
+                 (data (make-u8vector data-length 0)))
+            ((foreign-lambda* void ((u8vector dest)
+                                    ((c-pointer unsigned-byte) src)
+                                    (int size))
+                              "memcpy(dest, src, size * sizeof(unsigned char));")
+             data data-pointer data-length)
+            (proc
+             (select function
+               ((CONTINUE-EXT-FUNC-CODE) (data->sub-block data))
+               ((COMMENT-EXT-FUNC-CODE) (data->comment-block data))
+               ((GRAPHICS-EXT-FUNC-CODE) (data->graphics-control-block data))
+               ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
+               ((APPLICATION-EXT-FUNC-CODE) (data->application-block data)))
+             i)
+            (loop (add1 i))))))))
 
 (define (frame-width frame)
   (and-let* ((frame* (frame-pointer frame)))
@@ -328,6 +415,47 @@
               ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
               ((APPLICATION-EXT-FUNC-CODE) (data->application-block data))))
           (oob-error index count 'frame-extension-block-ref)))))
+
+(define (frame-extension-block-for-each proc frame)
+  (frame-extension-block-for-each-indexed
+   (lambda (extension-block i) (proc extension-block))
+   frame))
+
+(define (frame-extension-block-for-each-indexed proc frame)
+  (and-let* ((frame* (frame-pointer frame)))
+    (let ((count ((foreign-lambda* int (((c-pointer (struct "SavedImage")) frame))
+                                   "C_return(frame->ExtensionBlockCount);")
+                  frame*)))
+      (let loop ((i 0))
+        (when (< i count)
+          (let* ((extension-block* ((foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "SavedImage")) frame)
+                                                                                            (int i))
+                                                     "C_return(&(frame->ExtensionBlocks[i]));")
+                                    frame* i))
+                 (function ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                             "C_return(extension_block->Function);")
+                            extension-block*))
+                 (data-length ((foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                                "C_return(extension_block->ByteCount);")
+                               extension-block*))
+                 (data-pointer ((foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block))
+                                                 "C_return(extension_block->Bytes);")
+                                extension-block*))
+                 (data (make-u8vector data-length 0)))
+            ((foreign-lambda* void ((u8vector dest)
+                                    ((c-pointer unsigned-byte) src)
+                                    (int size))
+                              "memcpy(dest, src, size * sizeof(unsigned char));")
+             data data-pointer data-length)
+            (proc
+             (select function
+               ((CONTINUE-EXT-FUNC-CODE) (data->sub-block data))
+               ((COMMENT-EXT-FUNC-CODE) (data->comment-block data))
+               ((GRAPHICS-EXT-FUNC-CODE) (data->graphics-control-block data))
+               ((PLAINTEXT-EXT-FUNC-CODE) (data->text-block data))
+               ((APPLICATION-EXT-FUNC-CODE) (data->application-block data)))
+             i)
+            (loop (add1 i))))))))
 
 ;; TODO: implement gif-frame-fold with more intuitive semantics
 ;; NOTE: https://github.com/muennich/sxiv/blob/master/image.c#L147-L155

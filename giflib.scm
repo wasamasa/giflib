@@ -44,7 +44,7 @@
 (define DISPOSE-BACKGROUND (foreign-value "DISPOSE_BACKGROUND" unsigned-byte))
 (define DISPOSE-PREVIOUS (foreign-value "DISPOSE_PREVIOUS" unsigned-byte))
 
-(define (gif-error status location)
+(define (giflib-error status location)
   (abort
    (make-composite-condition
     (make-property-condition
@@ -103,7 +103,7 @@
       (let ((ret ((foreign-lambda int "DGifCloseFile" (c-pointer (struct "GifFileType")) (c-pointer int))
                   gif* (location status))))
         (when (= ret GIF-ERROR)
-          (gif-error status 'close-gif))))
+          (giflib-error status 'close-gif))))
     (gif-pointer-set! gif #f)))
 
 (define (open-gif filename)
@@ -112,7 +112,7 @@
                  filename (location status))))
       (if gif*
           (set-finalizer! (make-gif gif*) close-gif)
-          (gif-error status 'open-gif)))))
+          (giflib-error status 'open-gif)))))
 
 (define (slurp-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -122,7 +122,7 @@
         (let ((status ((foreign-lambda* int (((c-pointer (struct "GifFileType")) gif))
                                         "C_return(gif->Error);")
                        gif*)))
-          (gif-error status 'slurp-gif))))))
+          (giflib-error status 'slurp-gif))))))
 
 (define (gif-width gif)
   (and-let* ((gif* (gif-pointer gif)))

@@ -6,7 +6,7 @@
    color? color-red color-green color-blue
    gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
-   frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel
+   frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel frame-row frame-rows
    frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
    sub-block? sub-block-id sub-block-data
    comment-block? comment-block-text
@@ -76,6 +76,7 @@
 (define SavedImage->ExtensionBlockCount (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ExtensionBlockCount);"))
 (define SavedImage->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "SavedImage")) frame) (int i)) "C_return(&(frame->ExtensionBlocks[i]));"))
 (define SavedImage->pixel (foreign-lambda* unsigned-byte (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y)) "C_return(frame->RasterBits[y*width+x]);"))
+(define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int row)) "memcpy(dest, frame->RasterBits + row * width, width * sizeof(unsigned char));"))
 
 ;;; auxiliary records
 
@@ -391,9 +392,29 @@
         (SavedImage->pixel frame* width x y)
         (oob-error (format "~a|~a" x y) (format "~ax~a" width height) 'frame-pixel))))
 
-;; (define (frame-pixel-row frame row) ...)
-;; (define (frame-pixel-rect frame x y width height) ...)
-;; (define (frame-pixels frame) ...)
+(define (frame-row frame row)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*))
+         (data (make-u8vector width 0)))
+    (if (and (>= row 0) (< row height))
+        (begin
+          (SavedImage->row frame* data width row)
+          data)
+        (oob-error row height 'frame-row))))
+
+(define (frame-rows frame)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*))
+         (data (make-vector height #f)))
+    (let loop ((i 0))
+      (when (< i height)
+        (let ((row (make-u8vector width 0)))
+          (SavedImage->row frame* row width i)
+          (vector-set! data i row)
+          (loop (add1 i)))))
+    data))
 
 (define (frame-extension-block-count frame)
   (SavedImage->ExtensionBlockCount (frame-pointer frame)))

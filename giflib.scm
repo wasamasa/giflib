@@ -316,6 +316,33 @@
           (proc (make-frame (GifFileType->SavedImage gif* i)) i)
           (loop (add1 i)))))))
 
+;; TODO: add starred versions taking disposal and offsets into account
+;; NOTE: https://github.com/muennich/sxiv/blob/master/image.c#L147-L155
+
+;; 01: 5x5 of 1s at 0|0
+
+;; 1111111111
+;; 1111111111
+;; 1111111111
+;; 1111111111
+;; 1111111111
+
+;; 02: 3x3 of 0s at 1|1
+
+;; 1111111111
+;; 1100000011
+;; 1100000011
+;; 1100000011
+;; 1111111111
+
+;; 03: 1x1 of 1s at 2|2
+
+;; 1111111111
+;; 1100000011
+;; 1100110011
+;; 1100000011
+;; 1111111111
+
 ;;; color maps
 
 (define (color-map-count color-map)
@@ -381,8 +408,6 @@
         (make-color-map color-map*)
         #f)))
 
-;; TODO: implement gif-frame-fold with more intuitive semantics
-;; NOTE: https://github.com/muennich/sxiv/blob/master/image.c#L147-L155
 (define (frame-pixel frame x y)
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))

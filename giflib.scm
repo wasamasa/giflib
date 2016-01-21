@@ -296,8 +296,8 @@
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (if (and (>= index 0) (< index count))
-          (make-frame (GifFileType->SavedImage gif* index)))
-      (oob-error index count 'gif-frame-ref))))
+          (make-frame (GifFileType->SavedImage gif* index))
+          (oob-error index count 'gif-frame-ref)))))
 
 (define (gif-frame-for-each proc gif)
   (and-let* ((gif* (gif-pointer gif)))

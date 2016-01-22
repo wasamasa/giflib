@@ -1,7 +1,7 @@
 (module giflib
   (open-gif gif? slurp-gif close-gif
-   gif-width gif-height gif-resolution gif-bg-index
-   gif-color-map color-map? color-map-resolution
+   gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
+   gif-color-map color-map? color-map-resolution color-map-sorted?
    color-map-count color-map-ref color-map-for-each color-map-for-each-indexed
    color? color-red color-green color-blue
    gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
@@ -47,6 +47,7 @@
 (define GifFileType->SHeight (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SHeight);"))
 (define GifFileType->SColorResolution (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SColorResolution);"))
 (define GifFileType->SBackGroundColor (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SBackGroundColor);"))
+(define GifFileType->AspectByte (foreign-lambda* unsigned-byte (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->AspectByte);"))
 (define GifFileType->SColorMap (foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SColorMap);"))
 (define GifFileType->ImageCount (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->ImageCount);"))
 (define GifFileType->SavedImage (foreign-lambda* (c-pointer (struct "SavedImage")) (((c-pointer (struct "GifFileType")) gif) (int i)) "C_return(&(gif->SavedImages[i]));"))
@@ -56,6 +57,7 @@
 
 (define ColorMapObject->ColorCount (foreign-lambda* int (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->ColorCount);"))
 (define ColorMapObject->BitsPerPixel (foreign-lambda* int (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->BitsPerPixel);"))
+(define ColorMapObject->SortFlag (foreign-lambda* bool (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->SortFlag);"))
 (define ColorMapObject->Color (foreign-lambda* (c-pointer (struct "GifColorType")) (((c-pointer (struct "ColorMapObject")) color_map) (int i)) "C_return(&(color_map->Colors[i]));"))
 
 (define GifColorType->Red (foreign-lambda* unsigned-byte (((c-pointer (struct "GifColorType")) color)) "C_return(color->Red);"))
@@ -252,6 +254,13 @@
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SBackGroundColor gif*)))
 
+(define (gif-aspect-ratio gif)
+  (and-let* ((gif* (gif-pointer gif)))
+    (let ((aspect-byte (GifFileType->AspectByte gif*)))
+      (if (zero? aspect-byte)
+          #f
+          (/ (+ aspect-byte 15) 64)))))
+
 (define (gif-color-map gif)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((color-map* (GifFileType->SColorMap gif*)))
@@ -350,6 +359,9 @@
 
 (define (color-map-resolution color-map)
   (ColorMapObject->BitsPerPixel (color-map-pointer color-map)))
+
+(define (color-map-sorted? color-map)
+  (ColorMapObject->SortFlag (color-map-pointer color-map)))
 
 (define (color-map-ref color-map index)
   (let* ((color-map* (color-map-pointer color-map))

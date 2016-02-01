@@ -43,6 +43,7 @@
 
 ;;; foreign accessors
 
+;; GifFileType
 (define GifFileType->SWidth (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SWidth);"))
 (define GifFileType->SHeight (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SHeight);"))
 (define GifFileType->SColorResolution (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->SColorResolution);"))
@@ -55,20 +56,24 @@
 (define GifFileType->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "GifFileType")) gif) (int i)) "C_return(&(gif->ExtensionBlocks[i]));"))
 (define GifFileType->Error (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->Error);"))
 
+;; ColorMapObject
 (define ColorMapObject->ColorCount (foreign-lambda* int (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->ColorCount);"))
 (define ColorMapObject->BitsPerPixel (foreign-lambda* int (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->BitsPerPixel);"))
 (define ColorMapObject->SortFlag (foreign-lambda* bool (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->SortFlag);"))
 (define ColorMapObject->Color (foreign-lambda* (c-pointer (struct "GifColorType")) (((c-pointer (struct "ColorMapObject")) color_map) (int i)) "C_return(&(color_map->Colors[i]));"))
 
+;; GifColorType
 (define GifColorType->Red (foreign-lambda* unsigned-byte (((c-pointer (struct "GifColorType")) color)) "C_return(color->Red);"))
 (define GifColorType->Green (foreign-lambda* unsigned-byte (((c-pointer (struct "GifColorType")) color)) "C_return(color->Green);"))
 (define GifColorType->Blue (foreign-lambda* unsigned-byte (((c-pointer (struct "GifColorType")) color)) "C_return(color->Blue);"))
 
+;; ExtensionBlock
 (define ExtensionBlock->Function (foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block)) "C_return(extension_block->Function);"))
 (define ExtensionBlock->ByteCount (foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block)) "C_return(extension_block->ByteCount);"))
 (define ExtensionBlock->Bytes (foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block)) "C_return(extension_block->Bytes);"))
 (define ExtensionBlock->u8vector (foreign-lambda* void ((u8vector dest) ((c-pointer unsigned-byte) src) (int size)) "memcpy(dest, src, size * sizeof(unsigned char));"))
 
+;; SavedImage
 (define SavedImage->Width (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ImageDesc.Width);"))
 (define SavedImage->Height (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ImageDesc.Height);"))
 (define SavedImage->Left (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ImageDesc.Left);"))
@@ -86,7 +91,6 @@
 (define-record frame pointer)
 (define-record color-map pointer)
 (define-record color pointer)
-;; (define-record extension-block pointer type data-length data-pointer)
 (define-record sub-block id data)
 (define-record comment-block text)
 (define-record graphics-control-block disposal user-input? delay transparency-index)
@@ -216,7 +220,6 @@
 
 ;;; setting up and tearing down gifs
 
-;; TODO: check whether and-let* is necessary for anything not gif*
 (define (open-gif filename)
   (let-location ((status int 0))
     (let ((gif* (DGifOpenFileName filename (location status))))

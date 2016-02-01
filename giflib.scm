@@ -115,8 +115,9 @@
 (define SavedImage->ExtensionBlockCount (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ExtensionBlockCount);"))
 (define SavedImage->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "SavedImage")) frame) (int i)) "C_return(&(frame->ExtensionBlocks[i]));"))
 (define SavedImage->pixel (foreign-lambda* unsigned-byte (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y)) "C_return(frame->RasterBits[y*width+x]);"))
+(define SavedImage->pixel! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y) (int color)) "frame->RasterBits[y*width+x] = color;"))
 (define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int row)) "memcpy(dest, frame->RasterBits + row * width, width * sizeof(unsigned char));"))
-;; TODO: add pixel/row setters
+(define SavedImage->row! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector src) (int width) (int row)) "memcpy(frame->RasterBits + row * width, src, width * sizeof(unsigned char));"))
 
 ;;; auxiliary records
 

@@ -14,7 +14,7 @@
    text-block? text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
    application-block? application-block-identifier application-block-auth-code)
 
-(import chicken scheme foreign)
+(import chicken scheme foreign extras)
 (use srfi-4 bitstring)
 
 (foreign-declare "#include <gif_lib.h>")

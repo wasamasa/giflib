@@ -2,4 +2,5 @@
  (author "Vasilij Schneidermann")
  (license "BSD")
  (category graphics)
+ (depends bitstring)
  (foreign-depends "giflib-5.0"))

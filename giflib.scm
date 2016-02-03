@@ -52,6 +52,9 @@
 ;; TODO: extension blocks
 ;; TODO: the above allocators are equivalent to push, add the pop equivalents?
 
+;; gif_err.c
+(define GifErrorString (foreign-lambda c-string "GifErrorString" int))
+
 ;;; foreign accessors and mutators
 
 ;; GifFileType
@@ -140,8 +143,7 @@
     (make-property-condition
      'exn
      'location location
-     'message ((foreign-lambda c-string "GifErrorString" byte)
-               status))
+     'message (GifErrorString status))
     (make-property-condition
      'giflib
      'code status))))

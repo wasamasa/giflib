@@ -1,12 +1,14 @@
 (module giflib
-  (open-gif gif? slurp-gif close-gif
+  (gif? open-gif create-gif slurp-gif spew-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
-   gif-color-map color-map? color-map-resolution color-map-sorted?
-   color-map-count color-map-ref color-map-for-each color-map-for-each-indexed
-   color? color-red color-green color-blue
+   gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!
+   gif-color-map gif-color-map-set! create-color-map color-map? color-map-resolution color-map-sorted?
+   color-map-count color-map-ref color-map-set! color-map-set*! color-map-for-each color-map-for-each-indexed
+   color? create-color create-color*
+   color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
    gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
-   frame? frame-width frame-height frame-left frame-top frame-interlaced? frame-color-map frame-pixel frame-row frame-rows
+   frame? gif-append-frame! frame-allocate-raster! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
    frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
    sub-block? sub-block-id sub-block-data
    comment-block? comment-block-text
@@ -44,13 +46,15 @@
 
 ;; egif_lib.c
 (define EGifOpenFileName (foreign-lambda (c-pointer (struct "GifFileType")) "EGifOpenFileName" c-string bool (c-pointer int)))
-(define EGifSpew (foreign-lambda void "EGifSpew" (c-pointer (struct "GifFileType"))))
+(define EGifSpew (foreign-lambda int "EGifSpew" (c-pointer (struct "GifFileType"))))
+(define EGifCloseFile (foreign-lambda int "EGifCloseFile" (c-pointer (struct "GifFileType")) (c-pointer int)))
 
 ;; gifalloc.c
 (define GifMakeMapObject (foreign-lambda (c-pointer (struct "ColorMapObject")) "GifMakeMapObject" int (const (c-pointer (struct "GifColorType")))))
+(define GifFreeMapObject (foreign-lambda void "GifFreeMapObject" (c-pointer (struct "ColorMapObject"))))
 (define GifMakeSavedImage (foreign-lambda (c-pointer (struct "SavedImage")) "GifMakeSavedImage" (c-pointer (struct "GifFileType")) (const (c-pointer (struct "SavedImage")))))
+(define GifFreeSavedImages (foreign-lambda void "GifFreeSavedImages" (c-pointer (struct "GifFileType"))))
 ;; TODO: extension blocks
-;; TODO: the above allocators are equivalent to push, add the pop equivalents?
 
 ;; gif_err.c
 (define GifErrorString (foreign-lambda c-string "GifErrorString" int))
@@ -82,10 +86,8 @@
 (define ColorMapObject->SortFlag (foreign-lambda* bool (((c-pointer (struct "ColorMapObject")) color_map)) "C_return(color_map->SortFlag);"))
 (define ColorMapObject->SortFlag-set! (foreign-lambda* void (((c-pointer (struct "ColorMapObject")) color_map) (bool flag)) "color_map->SortFlag = flag;"))
 (define ColorMapObject->Color (foreign-lambda* (c-pointer (struct "GifColorType")) (((c-pointer (struct "ColorMapObject")) color_map) (int i)) "C_return(&(color_map->Colors[i]));"))
-;; TODO: define create-color! for passing the result to this
-;; TODO: put this on heap and free with finalizer?
 (define ColorMapObject->Color-set! (foreign-lambda* void (((c-pointer (struct "ColorMapObject")) color_map) (int i) ((c-pointer (struct "GifColorType")) color)) "color_map->Colors[i] = *color;"))
-(define ColorMapObject->Color*-set! (foreign-lambda* void (((c-pointer (struct "ColorMapObject")) color_map) (int i) (unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "color_map->Colors[i] = (GifColorType) { red, green, blue };"))
+(define ColorMapObject->Color-set*! (foreign-lambda* void (((c-pointer (struct "ColorMapObject")) color_map) (int i) (unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "color_map->Colors[i] = (GifColorType) { red, green, blue };"))
 
 ;; GifColorType
 (define GifColorType->Red (foreign-lambda* unsigned-byte (((c-pointer (struct "GifColorType")) color)) "C_return(color->Red);"))
@@ -118,13 +120,20 @@
 (define SavedImage->ExtensionBlockCount (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ExtensionBlockCount);"))
 (define SavedImage->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "SavedImage")) frame) (int i)) "C_return(&(frame->ExtensionBlocks[i]));"))
 (define SavedImage->pixel (foreign-lambda* unsigned-byte (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y)) "C_return(frame->RasterBits[y*width+x]);"))
-(define SavedImage->pixel-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y) (int color)) "frame->RasterBits[y*width+x] = color;"))
-(define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int row)) "memcpy(dest, frame->RasterBits + row * width, width * sizeof(unsigned char));"))
-(define SavedImage->row-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector src) (int width) (int row)) "memcpy(frame->RasterBits + row * width, src, width * sizeof(unsigned char));"))
+(define SavedImage->pixel-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y) (unsigned-byte color)) "frame->RasterBits[y*width+x] = color;"))
+(define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int i)) "memcpy(dest, frame->RasterBits + i * width, width * sizeof(unsigned char));"))
+(define SavedImage->row-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector src) (int width) (int i)) "memcpy(frame->RasterBits + i * width, src, width * sizeof(unsigned char));"))
+(define SavedImage->realloc (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame)) "free(frame->RasterBits); frame->RasterBits = calloc(frame->ImageDesc.Width * frame->ImageDesc.Height, sizeof(unsigned char));"))
+
+;; various
+
+(define create-GifColorType (foreign-lambda* (c-pointer (struct "GifColorType")) () "C_return(malloc(sizeof(GifColorType)));"))
+(define create-GifColorType* (foreign-lambda* (c-pointer (struct "GifColorType")) ((unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "GifColorType *color = malloc(sizeof(GifColorType)); color->Red = red; color->Green = green; color->Blue = blue; C_return(color);"))
+(define free-GifColorType (foreign-lambda* void (((c-pointer (struct "GifColorType")) color)) "free(color);"))
 
 ;;; auxiliary records
 
-(define-record gif pointer)
+(define-record gif mode pointer)
 (define-record frame pointer)
 (define-record color-map pointer)
 (define-record color pointer)
@@ -155,8 +164,26 @@
      'exn
      'location location
      'message (format "Out of bounds: ~a / ~a" index count))
+    (make-property-condition 'bounds))))
+
+(define (interval-error value lower-bound upper-bound location)
+  (abort
+   (make-composite-condition
     (make-property-condition
-     'bounds))))
+     'exn
+     'location location
+     'message (format "Value ~a outside interval [~a ~a]"
+                      value lower-bound upper-bound))
+    (make-property-condition 'range))))
+
+(define (type-error value expected location)
+  (abort
+   (make-composite-condition
+    (make-property-condition
+     'exn
+     'location location
+     'message (format "Bad argument type - not a ~a: ~a" expected value))
+    (make-property-condition 'type))))
 
 (define (unknown-extension-block-error location)
   (abort
@@ -165,8 +192,7 @@
      'exn
      'location location
      'message "Unknown extension block")
-    (make-property-condition
-     'match))))
+    (make-property-condition 'match))))
 
 (define (unknown-disposal-error location)
   (abort
@@ -175,8 +201,7 @@
      'exn
      'location location
      'message "Unknown disposal")
-    (make-property-condition
-     'match))))
+    (make-property-condition 'match))))
 
 (define (unpack-error location)
   (abort
@@ -185,8 +210,7 @@
      'exn
      'location location
      'message "Unpacking error")
-    (make-property-condition
-     'match))))
+    (make-property-condition 'match))))
 
 ;;; extension block data unpacking
 
@@ -260,19 +284,38 @@
   (let-location ((status int 0))
     (let ((gif* (DGifOpenFileName filename (location status))))
       (if gif*
-          (set-finalizer! (make-gif gif*) close-gif)
+          (set-finalizer! (make-gif 'read gif*) close-gif)
           (giflib-error status 'open-gif)))))
+
+(define (create-gif filename #!optional overwrite?)
+  (let-location ((status int 0))
+    (let ((gif* (EGifOpenFileName filename (not overwrite?) (location status))))
+      (if gif*
+          (set-finalizer! (make-gif 'write gif*) close-gif)
+          (giflib-error status 'create-gif)))))
 
 (define (slurp-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
     (when (= (DGifSlurp gif*) GIF_ERROR)
       (giflib-error (GifFileType->Error gif*) 'slurp-gif))))
 
+(define (spew-gif gif)
+  (and-let* ((gif* (gif-pointer gif)))
+    ;; TODO: sanity checks (like frame dimensions)
+    (when (= (EGifSpew gif*) GIF_ERROR)
+      (giflib-error (GifFileType->Error gif*) 'spew-gif))
+    ;; spewing closes the gif...
+    (GifFreeSavedImages gif*)
+    (gif-pointer-set! gif #f)))
+
 (define (close-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
     (let-location ((status int 0))
-      (when (= (DGifCloseFile gif* (location status)) GIF_ERROR)
-        (giflib-error status 'close-gif)))
+      (let ((close-fun (case (gif-mode gif)
+                         ((read) DGifCloseFile)
+                         ((write) EGifCloseFile))))
+        (when (= (close-fun gif* (location status)) GIF_ERROR)
+          (giflib-error status 'close-gif))))
     (gif-pointer-set! gif #f)))
 
 ;;; gifs
@@ -281,24 +324,69 @@
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SWidth gif*)))
 
+(define (gif-width-set! gif width)
+  (and-let* ((gif* (gif-pointer gif)))
+    (GifFileType->SWidth-set! gif* width)))
+
 (define (gif-height gif)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SHeight gif*)))
+
+(define (gif-height-set! gif height)
+  (and-let* ((gif* (gif-pointer gif)))
+    (GifFileType->SHeight-set! gif* height)))
 
 (define (gif-resolution gif)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SColorResolution gif*)))
 
+(define (gif-resolution-set! gif resolution)
+  (and-let* ((gif* (gif-pointer gif)))
+    (if (and (> resolution 0) (<= resolution 8))
+        (GifFileType->SColorResolution-set! gif* resolution)
+        (interval-error resolution 1 8 'gif-resolution-set!))))
+
 (define (gif-bg-index gif)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SBackGroundColor gif*)))
+
+(define (gif-bg-index-set! gif bg-index)
+  (and-let* ((gif* (gif-pointer gif)))
+    (if (and (>= bg-index 0) (< bg-index 256))
+        (GifFileType->SBackGroundColor-set! gif* bg-index)
+        (interval-error bg-index 0 255 'gif-bg-index-set!))))
+
+(define epsilon 1e-6)
+
+(define (aspect-byte->ratio aspect-byte)
+  (/ (+ aspect-byte 15) 64))
+
+(define (aspect-ratio->byte aspect-ratio)
+  (inexact->exact (floor (- (* aspect-ratio 64) 15))))
 
 (define (gif-aspect-ratio gif)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((aspect-byte (GifFileType->AspectByte gif*)))
       (if (zero? aspect-byte)
           #f
-          (/ (+ aspect-byte 15) 64)))))
+          (aspect-byte->ratio aspect-byte)))))
+
+(define (gif-aspect-ratio-set! gif aspect-ratio)
+  (and-let* ((gif* (gif-pointer gif)))
+    (cond
+     ((not aspect-ratio)
+      (GifFileType->AspectByte-set! gif* 0))
+     ((number? aspect-ratio)
+      (let ((lower-bound (aspect-byte->ratio 0))
+            (upper-bound (aspect-byte->ratio 255)))
+        (if (and (or (< (abs (- lower-bound aspect-ratio)) epsilon)
+                     (> aspect-ratio lower-bound))
+                 (or (< (abs (- upper-bound aspect-ratio)) epsilon)
+                     (< aspect-ratio upper-bound)))
+            (GifFileType->AspectByte-set! gif* (aspect-ratio->byte aspect-ratio))
+            (interval-error aspect-ratio lower-bound upper-bound
+                            'gif-aspect-ratio-set!))))
+     (else (type-error aspect-ratio "number or #f" 'gif-aspect-ratio-set!)))))
 
 (define (gif-color-map gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -306,6 +394,11 @@
       (if color-map*
           (make-color-map color-map*)
           #f))))
+
+(define (gif-color-map-set! gif color-map)
+  (and-let* ((gif* (gif-pointer gif))
+             (color-map* (color-map-pointer color-map)))
+    (GifFileType->SColorMap-set! gif* color-map*)))
 
 (define (gif-extension-block-count gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -365,6 +458,8 @@
           (loop (add1 i)))))))
 
 ;; TODO: add starred versions taking disposal and offsets into account
+;; NOTE: alternatively write something unoptimizing a given gif or
+;; simply accessors that interpret coordinates differently
 ;; NOTE: https://github.com/muennich/sxiv/blob/master/image.c#L147-L155
 
 ;; 01: 5x5 of 1s at 0|0
@@ -393,33 +488,56 @@
 
 ;;; color maps
 
+(define (create-color-map size #!optional color-map)
+  (if (and (>= size 0) (<= size 255))
+      (let ((color-map* (if color-map (color-map-pointer color-map) #f)))
+        (set-finalizer! (make-color-map (GifMakeMapObject size color-map*)) close-color-map))
+      (interval-error size 0 255 'create-color-map)))
+
+(define (close-color-map color-map)
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (GifFreeMapObject color-map*)
+    (color-map-pointer-set! color-map #f)))
+
 (define (color-map-count color-map)
-  (ColorMapObject->ColorCount (color-map-pointer color-map)))
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (ColorMapObject->ColorCount color-map*)))
 
 (define (color-map-resolution color-map)
-  (ColorMapObject->BitsPerPixel (color-map-pointer color-map)))
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (ColorMapObject->BitsPerPixel color-map*)))
 
 (define (color-map-sorted? color-map)
-  (ColorMapObject->SortFlag (color-map-pointer color-map)))
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (ColorMapObject->SortFlag color-map*)))
 
 (define (color-map-ref color-map index)
-  (let* ((color-map* (color-map-pointer color-map))
-         (count (ColorMapObject->ColorCount color-map*)))
+  (and-let* ((color-map* (color-map-pointer color-map))
+             (count (ColorMapObject->ColorCount color-map*)))
     (if (and (>= index 0) (< index count))
         (make-color (ColorMapObject->Color color-map* index))
         (oob-error index count 'color-map-ref))))
 
+(define (color-map-set! color-map index color)
+  (and-let* ((color-map* (color-map-pointer color-map))
+             (color* (color-pointer color)))
+    (ColorMapObject->Color-set! color-map* index color*)))
+
+(define (color-map-set*! color-map index red green blue)
+  (and-let* ((color-map* (color-map-pointer color-map)))
+    (ColorMapObject->Color-set*! color-map* index red green blue)))
+
 (define (color-map-for-each proc color-map)
-  (let* ((color-map* (color-map-pointer color-map))
-         (count (ColorMapObject->ColorCount color-map*)))
+  (and-let* ((color-map* (color-map-pointer color-map))
+             (count (ColorMapObject->ColorCount color-map*)))
     (let loop ((i 0))
       (when (< i count)
         (proc (make-color (ColorMapObject->Color color-map* i)))
         (loop (add1 i))))))
 
 (define (color-map-for-each-indexed proc color-map)
-  (let* ((color-map* (color-map-pointer color-map))
-         (count (ColorMapObject->ColorCount color-map*)))
+  (and-let* ((color-map* (color-map-pointer color-map))
+             (count (ColorMapObject->ColorCount color-map*)))
     (let loop ((i 0))
       (when (< i count)
         (proc (make-color (ColorMapObject->Color color-map* i)) i)
@@ -427,37 +545,98 @@
 
 ;;; colors
 
+(define (create-color)
+  (set-finalizer! (make-color (create-GifColorType)) close-color))
+
+(define (create-color* red green blue)
+  (set-finalizer! (make-color (create-GifColorType* red green blue)) close-color))
+
+(define (close-color color)
+  (and-let* ((color* (color-pointer color)))
+    (free-GifColorType color*)
+    (color-pointer-set! color #f)))
+
 (define (color-red color)
-  (GifColorType->Red (color-pointer color)))
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Red color*)))
+
+(define (color-red-set! color red)
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Red-set! color* red)))
 
 (define (color-green color)
-  (GifColorType->Green (color-pointer color)))
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Green color*)))
+
+(define (color-green-set! color green)
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Green-set! color* green)))
 
 (define (color-blue color)
-  (GifColorType->Blue (color-pointer color)))
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Blue color*)))
+
+(define (color-blue-set! color blue)
+  (and-let* ((color* (color-pointer color)))
+    (GifColorType->Blue-set! color* blue)))
 
 ;;; frames
+
+;; frames are special as they only make sense in the context of a gif,
+;; so you need to specify a gif when appending a new one and can only
+;; free all of them at once
+(define (gif-append-frame! gif #!optional frame)
+  (and-let* ((gif* (gif-pointer gif)))
+    (make-frame (GifMakeSavedImage gif* (if frame (frame-pointer frame) #f)))))
+
+(define (frame-allocate-raster! frame)
+  (let ((frame* (frame-pointer frame)))
+    (when (zero? (SavedImage->Width frame*))
+      (type-error 0 "positive width" 'frame-allocate-raster!))
+    (when (zero? (SavedImage->Height frame*))
+      (type-error 0 "positive height" 'frame-allocate-raster!))
+    (SavedImage->realloc (frame-pointer frame))))
 
 (define (frame-width frame)
   (SavedImage->Width (frame-pointer frame)))
 
+(define (frame-width-set! frame width)
+  (SavedImage->Width-set! (frame-pointer frame) width))
+
 (define (frame-height frame)
   (SavedImage->Height (frame-pointer frame)))
+
+(define (frame-height-set! frame height)
+  (SavedImage->Height-set! (frame-pointer frame) height))
 
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
 
+(define (frame-left-set! frame left)
+  (SavedImage->Left-set! (frame-pointer frame) left))
+
 (define (frame-top frame)
   (SavedImage->Top (frame-pointer frame)))
 
+(define (frame-top-set! frame top)
+  (SavedImage->Top-set! (frame-pointer frame) top))
+
 (define (frame-interlaced? frame)
   (SavedImage->Interlace (frame-pointer frame)))
+
+(define (frame-interlaced?-set! frame interlaced?)
+  (SavedImage->Interlace-set! (frame-pointer frame) interlaced?))
 
 (define (frame-color-map frame)
   (let ((color-map* (SavedImage->ColorMap (frame-pointer frame))))
     (if color-map*
         (make-color-map color-map*)
         #f)))
+
+(define (frame-color-map-set! frame color-map)
+  (and-let* ((frame* (frame-pointer frame))
+             (color-map* (color-map-pointer color-map)))
+    (SavedImage->ColorMap-set! frame* color-map*)))
 
 (define (frame-pixel frame x y)
   (let* ((frame* (frame-pointer frame))
@@ -468,16 +647,36 @@
         (SavedImage->pixel frame* width x y)
         (oob-error (format "~a|~a" x y) (format "~ax~a" width height) 'frame-pixel))))
 
-(define (frame-row frame row)
+(define (frame-pixel-set! frame x y index)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*)))
+    (if (and (>= x 0) (>= y 0)
+             (< x width) (< y height))
+        (SavedImage->pixel-set! frame* width x y index)
+        (oob-error (format "~a|~a" x y) (format "~ax~a" width height) 'frame-pixel-set!))))
+
+(define (frame-row frame index)
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*))
-         (data (make-u8vector width 0)))
-    (if (and (>= row 0) (< row height))
+         (row (make-u8vector width 0)))
+    (if (and (>= index 0) (< index height))
         (begin
-          (SavedImage->row frame* data width row)
-          data)
-        (oob-error row height 'frame-row))))
+          (SavedImage->row frame* row width index)
+          row)
+        (oob-error index height 'frame-row))))
+
+(define (frame-row-set! frame index row)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*))
+         (row-length (u8vector-length row)))
+    (when (not (and (>= index 0) (< index height)))
+      (oob-error index height 'frame-row-set!))
+    (when (not (= row-length width))
+      (type-error row-length "correct length" 'frame-row-set!))
+    (SavedImage->row-set! frame* row width index)))
 
 (define (frame-rows frame)
   (let* ((frame* (frame-pointer frame))
@@ -491,6 +690,21 @@
           (vector-set! data i row)
           (loop (add1 i)))))
     data))
+
+(define (frame-rows-set! frame rows)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*)))
+    (when (not (= (vector-length rows) height))
+      (type-error (vector-length rows) "correct length" 'frame-rows-set!))
+    (let loop ((i 0))
+      (when (< i height)
+        (let* ((row (vector-ref rows i))
+               (row-length (u8vector-length row)))
+          (when (not (= row-length width))
+            (type-error row-length "correct width" 'frame-rows-set!))
+          (SavedImage->row-set! frame* row width i)
+          (loop (add1 i)))))))
 
 (define (frame-extension-block-count frame)
   (SavedImage->ExtensionBlockCount (frame-pointer frame)))
@@ -520,5 +734,7 @@
         (let* ((extension-block* (SavedImage->ExtensionBlock frame* i)))
           (proc (ExtensionBlock->specialized-block extension-block*) i)
           (loop (add1 i)))))))
+
+;; TODO: turn extension blocks into meta data
 
 )

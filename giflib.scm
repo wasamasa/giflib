@@ -10,11 +10,11 @@
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
    frame? gif-append-frame! frame-allocate-raster! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
    frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
-   sub-block? sub-block-id sub-block-data
-   comment-block? comment-block-text
-   graphics-control-block? graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
-   text-block? text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
-   application-block? application-block-identifier application-block-auth-code)
+   sub-block? make-sub-block sub-block-id sub-block-data
+   comment-block? make-comment-block comment-block-text
+   graphics-control-block? make-graphics-control-block graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
+   text-block? make-text-block text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
+   application-block? make-application-block application-block-identifier application-block-auth-code)
 
 (import chicken scheme foreign extras)
 (use srfi-4 bitstring)

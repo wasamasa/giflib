@@ -219,7 +219,7 @@
     (((id 8 little)
       (data bitstring))
      (make-sub-block id (bitstring->u8vector data 8)))
-    (else (unpack-error 'extension-block->sub-block))))
+    (else (unpack-error 'data->sub-block))))
 
 (define (data->comment-block data)
   (make-comment-block (blob->string (u8vector->blob data))))
@@ -238,9 +238,9 @@
         ((DISPOSE_DO_NOT) 'none)
         ((DISPOSE_BACKGROUND) 'background)
         ((DISPOSE_PREVIOUS) 'previous)
-        (else (unknown-disposal-error 'extension-block->graphics-control-block)))
+        (else (unknown-disposal-error 'data->graphics-control-block)))
       user-input? delay-time (and transparency-index? transparency-index)))
-    (else (unpack-error 'extension-block->graphics-control-block))))
+    (else (unpack-error 'data->graphics-control-block))))
 
 (define (data->text-block data)
   (bitmatch data
@@ -254,7 +254,7 @@
       (bg-index 8 little))
      (make-text-block grid-left grid-top grid-width grid-height
                       cell-width cell-height fg-index bg-index))
-    (else (unpack-error 'extension-block->text-block))))
+    (else (unpack-error 'data->text-block))))
 
 (define (data->application-block data)
   (bitmatch data
@@ -262,7 +262,7 @@
       (auth-code (* 3 8) bitstring))
      (make-application-block (bitstring->string identifier)
                              (bitstring->string auth-code)))
-    (else (unpack-error 'extension-block->application-block))))
+    (else (unpack-error 'data->application-block))))
 
 (define (ExtensionBlock->specialized-block extension-block*)
   (let* ((function (ExtensionBlock->Function extension-block*))

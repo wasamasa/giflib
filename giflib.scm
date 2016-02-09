@@ -687,7 +687,7 @@
          (count (SavedImage->ExtensionBlockCount frame*)))
     (let loop ((i 0))
       (when (< i count)
-        (let* ((extension-block* (SavedImage->ExtensionBlock frame* i)))
+        (let ((extension-block* (SavedImage->ExtensionBlock frame* i)))
           (proc (ExtensionBlock->specialized-block extension-block*))
           (loop (add1 i)))))))
 
@@ -696,7 +696,7 @@
          (count (SavedImage->ExtensionBlockCount frame*)))
     (let loop ((i 0))
       (when (< i count)
-        (let* ((extension-block* (SavedImage->ExtensionBlock frame* i)))
+        (let ((extension-block* (SavedImage->ExtensionBlock frame* i)))
           (proc (ExtensionBlock->specialized-block extension-block*) i)
           (loop (add1 i)))))))
 

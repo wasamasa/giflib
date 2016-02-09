@@ -127,6 +127,8 @@
 
 ;; various
 
+(define free-GifFileType-ExtensionBlocks (foreign-lambda* void (((c-pointer (struct "GifFileType")) gif)) "GifFreeExtensions(&(gif->ExtensionBlockCount), &(gif->ExtensionBlocks));"))
+
 (define create-GifColorType (foreign-lambda* (c-pointer (struct "GifColorType")) () "C_return(malloc(sizeof(GifColorType)));"))
 (define create-GifColorType* (foreign-lambda* (c-pointer (struct "GifColorType")) ((unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "GifColorType *color = malloc(sizeof(GifColorType)); color->Red = red; color->Green = green; color->Blue = blue; C_return(color);"))
 (define free-GifColorType (foreign-lambda* void (((c-pointer (struct "GifColorType")) color)) "free(color);"))
@@ -357,6 +359,7 @@
       (giflib-error (GifFileType->Error gif*) 'spew-gif))
     ;; spewing closes the gif...
     (GifFreeSavedImages gif*)
+    (free-GifFileType-ExtensionBlocks gif*)
     (gif-pointer-set! gif #f)))
 
 (define (close-gif gif)

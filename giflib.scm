@@ -214,123 +214,6 @@
      'message "Unpacking error")
     (make-property-condition 'match))))
 
-;;; extension block data packing and unpacking
-
-(bitpacket sub-block
-  (id 8 little)
-  (data bitstring))
-
-(define (data->sub-block data)
-  (bitmatch data
-    (((sub-block bitpacket))
-     (make-sub-block id (bitstring->u8vector data)))
-    (else (unpack-error 'data->sub-block))))
-
-(define (sub-block->data block)
-  (let ((id (sub-block-id block))
-        (data (sub-block-data block)))
-    (bitstring->u8vector (bitconstruct (sub-block bitpacket)))))
-
-(define (data->comment-block data)
-  (make-comment-block (blob->string (u8vector->blob data))))
-
-(define (comment-block->data block)
-  (blob->u8vector (string->blob (comment-block-text block))))
-
-(bitpacket graphics-control-block
-  (reserved 3 little)
-  (disposal 3 little)
-  (user-input? 1 boolean little)
-  (transparency-index? 1 boolean little)
-  (delay-time (* 2 8) little)
-  (transparency-index 8 little))
-
-(define (data->graphics-control-block data)
-  (bitmatch data
-    (((graphics-control-block bitpacket))
-     (make-graphics-control-block
-      (select disposal
-        ((DISPOSAL_UNSPECIFIED) 'unspecified)
-        ((DISPOSE_DO_NOT) 'none)
-        ((DISPOSE_BACKGROUND) 'background)
-        ((DISPOSE_PREVIOUS) 'previous)
-        (else (unknown-disposal-error 'data->graphics-control-block)))
-      user-input? delay-time (and transparency-index? transparency-index)))
-    (else (unpack-error 'data->graphics-control-block))))
-
-(define (graphics-control-block->data block)
-  (let ((reserved 0)
-        (disposal
-         (case (graphics-control-block-disposal block)
-           ((unspecified) DISPOSAL_UNSPECIFIED)
-           ((none) DISPOSE_DO_NOT)
-           ((background) DISPOSE_BACKGROUND)
-           ((previous) DISPOSE_PREVIOUS)
-           (else (unknown-disposal-error 'graphics-control-block->data))))
-        (user-input? (graphics-control-block-user-input? block))
-        (transparency-index? (and (graphics-control-block-transparency-index block) #t))
-        (delay-time (graphics-control-block-delay block))
-        (transparency-index (or (graphics-control-block-transparency-index block) 0)))
-    (bitstring->u8vector (bitconstruct (graphics-control-block bitpacket)))))
-
-(bitpacket text-block
-  (grid-left (* 2 8) little)
-  (grid-top (* 2 8) little)
-  (grid-width (* 2 8) little)
-  (grid-height (* 2 8) little)
-  (cell-width 8 little)
-  (cell-height 8 little)
-  (fg-index 8 little)
-  (bg-index 8 little))
-
-(define (data->text-block data)
-  (bitmatch data
-    (((text-block bitpacket))
-     (make-text-block grid-left grid-top grid-width grid-height
-                      cell-width cell-height fg-index bg-index))
-    (else (unpack-error 'data->text-block))))
-
-(define (text-block->data block)
-  (let ((grid-left (text-block-grid-left block))
-        (grid-top (text-block-grid-top block))
-        (grid-width (text-block-grid-width block))
-        (grid-height (text-block-grid-height block))
-        (cell-width (text-block-cell-width block))
-        (cell-height (text-block-cell-height block))
-        (fg-index (text-block-fg-index block))
-        (bg-index (text-block-bg-index block)))
-    (bitstring->u8vector (bitconstruct (text-block bitpacket)))))
-
-(bitpacket application-block
-  (identifier (* 8 8) bitstring)
-  (auth-code (* 3 8) bitstring))
-
-(define (data->application-block data)
-  (bitmatch data
-    (((application-block bitpacket))
-     (make-application-block (bitstring->string identifier)
-                             (bitstring->string auth-code)))
-    (else (unpack-error 'data->application-block))))
-
-(define (application-block->data block)
-  (let ((identifier (application-block-identifier block))
-        (auth-code (application-block-auth-code block)))
-    (bitstring->u8vector (bitconstruct (application-block bitpacket)))))
-
-(define (ExtensionBlock->specialized-block extension-block*)
-  (let* ((function (ExtensionBlock->Function extension-block*))
-         (data-length (ExtensionBlock->ByteCount extension-block*))
-         (data-pointer (ExtensionBlock->Bytes extension-block*))
-         (data (make-u8vector data-length 0)))
-    (ExtensionBlock->u8vector data data-pointer data-length)
-    (select function
-      ((CONTINUE_EXT_FUNC_CODE) (data->sub-block data))
-      ((COMMENT_EXT_FUNC_CODE) (data->comment-block data))
-      ((GRAPHICS_EXT_FUNC_CODE) (data->graphics-control-block data))
-      ((PLAINTEXT_EXT_FUNC_CODE) (data->text-block data))
-      ((APPLICATION_EXT_FUNC_CODE) (data->application-block data))
-      (else (unknown-extension-block-error 'ExtensionBlock->specialized-block)))))
-
 ;;; setting up and tearing down gifs
 
 (define (open-gif filename)
@@ -788,6 +671,125 @@
         (let* ((extension-block* (SavedImage->ExtensionBlock frame* i)))
           (proc (ExtensionBlock->specialized-block extension-block*) i)
           (loop (add1 i)))))))
+
+;;; extension blocks
+
+;; packing and unpacking
+
+(bitpacket sub-block
+  (id 8 little)
+  (data bitstring))
+
+(define (data->sub-block data)
+  (bitmatch data
+    (((sub-block bitpacket))
+     (make-sub-block id (bitstring->u8vector data)))
+    (else (unpack-error 'data->sub-block))))
+
+(define (sub-block->data block)
+  (let ((id (sub-block-id block))
+        (data (sub-block-data block)))
+    (bitstring->u8vector (bitconstruct (sub-block bitpacket)))))
+
+(define (data->comment-block data)
+  (make-comment-block (blob->string (u8vector->blob data))))
+
+(define (comment-block->data block)
+  (blob->u8vector (string->blob (comment-block-text block))))
+
+(bitpacket graphics-control-block
+  (reserved 3 little)
+  (disposal 3 little)
+  (user-input? 1 boolean little)
+  (transparency-index? 1 boolean little)
+  (delay-time (* 2 8) little)
+  (transparency-index 8 little))
+
+(define (data->graphics-control-block data)
+  (bitmatch data
+    (((graphics-control-block bitpacket))
+     (make-graphics-control-block
+      (select disposal
+        ((DISPOSAL_UNSPECIFIED) 'unspecified)
+        ((DISPOSE_DO_NOT) 'none)
+        ((DISPOSE_BACKGROUND) 'background)
+        ((DISPOSE_PREVIOUS) 'previous)
+        (else (unknown-disposal-error 'data->graphics-control-block)))
+      user-input? delay-time (and transparency-index? transparency-index)))
+    (else (unpack-error 'data->graphics-control-block))))
+
+(define (graphics-control-block->data block)
+  (let ((reserved 0)
+        (disposal
+         (case (graphics-control-block-disposal block)
+           ((unspecified) DISPOSAL_UNSPECIFIED)
+           ((none) DISPOSE_DO_NOT)
+           ((background) DISPOSE_BACKGROUND)
+           ((previous) DISPOSE_PREVIOUS)
+           (else (unknown-disposal-error 'graphics-control-block->data))))
+        (user-input? (graphics-control-block-user-input? block))
+        (transparency-index? (and (graphics-control-block-transparency-index block) #t))
+        (delay-time (graphics-control-block-delay block))
+        (transparency-index (or (graphics-control-block-transparency-index block) 0)))
+    (bitstring->u8vector (bitconstruct (graphics-control-block bitpacket)))))
+
+(bitpacket text-block
+  (grid-left (* 2 8) little)
+  (grid-top (* 2 8) little)
+  (grid-width (* 2 8) little)
+  (grid-height (* 2 8) little)
+  (cell-width 8 little)
+  (cell-height 8 little)
+  (fg-index 8 little)
+  (bg-index 8 little))
+
+(define (data->text-block data)
+  (bitmatch data
+    (((text-block bitpacket))
+     (make-text-block grid-left grid-top grid-width grid-height
+                      cell-width cell-height fg-index bg-index))
+    (else (unpack-error 'data->text-block))))
+
+(define (text-block->data block)
+  (let ((grid-left (text-block-grid-left block))
+        (grid-top (text-block-grid-top block))
+        (grid-width (text-block-grid-width block))
+        (grid-height (text-block-grid-height block))
+        (cell-width (text-block-cell-width block))
+        (cell-height (text-block-cell-height block))
+        (fg-index (text-block-fg-index block))
+        (bg-index (text-block-bg-index block)))
+    (bitstring->u8vector (bitconstruct (text-block bitpacket)))))
+
+(bitpacket application-block
+  (identifier (* 8 8) bitstring)
+  (auth-code (* 3 8) bitstring))
+
+(define (data->application-block data)
+  (bitmatch data
+    (((application-block bitpacket))
+     (make-application-block (bitstring->string identifier)
+                             (bitstring->string auth-code)))
+    (else (unpack-error 'data->application-block))))
+
+(define (application-block->data block)
+  (let ((identifier (application-block-identifier block))
+        (auth-code (application-block-auth-code block)))
+    (bitstring->u8vector (bitconstruct (application-block bitpacket)))))
+
+(define (ExtensionBlock->specialized-block extension-block*)
+  (let* ((function (ExtensionBlock->Function extension-block*))
+         (data-length (ExtensionBlock->ByteCount extension-block*))
+         (data-pointer (ExtensionBlock->Bytes extension-block*))
+         (data (make-u8vector data-length 0)))
+    (ExtensionBlock->u8vector data data-pointer data-length)
+    (select function
+      ((CONTINUE_EXT_FUNC_CODE) (data->sub-block data))
+      ((COMMENT_EXT_FUNC_CODE) (data->comment-block data))
+      ((GRAPHICS_EXT_FUNC_CODE) (data->graphics-control-block data))
+      ((PLAINTEXT_EXT_FUNC_CODE) (data->text-block data))
+      ((APPLICATION_EXT_FUNC_CODE) (data->application-block data))
+      (else (unknown-extension-block-error 'ExtensionBlock->specialized-block)))))
 
 ;; TODO: turn extension blocks into meta data
 

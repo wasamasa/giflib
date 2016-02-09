@@ -777,6 +777,8 @@
         (auth-code (application-block-auth-code block)))
     (bitstring->u8vector (bitconstruct (application-block bitpacket)))))
 
+;; specialization and unspecialization
+
 (define (ExtensionBlock->specialized-block extension-block*)
   (let* ((function (ExtensionBlock->Function extension-block*))
          (data-length (ExtensionBlock->ByteCount extension-block*))
@@ -790,6 +792,24 @@
       ((PLAINTEXT_EXT_FUNC_CODE) (data->text-block data))
       ((APPLICATION_EXT_FUNC_CODE) (data->application-block data))
       (else (unknown-extension-block-error 'ExtensionBlock->specialized-block)))))
+
+(define (specialized-block->data block)
+  (cond
+   ((sub-block? block) (sub-block->data block))
+   ((comment-block? block) (comment-block->data block))
+   ((graphics-control-block? block) (graphics-control-block->data block))
+   ((text-block? block) (text-block->data block))
+   ((application-block? block) (application-block->data block))
+   (else (unknown-extension-block-error 'specialized-block->data))))
+
+(define (specialized-block->function block)
+  (cond
+   ((sub-block? block) CONTINUE_EXT_FUNC_CODE)
+   ((comment-block? block) COMMENT_EXT_FUNC_CODE)
+   ((graphics-control-block? block) GRAPHICS_EXT_FUNC_CODE)
+   ((text-block? block) PLAINTEXT_EXT_FUNC_CODE)
+   ((application-block? block) APPLICATION_EXT_FUNC_CODE)
+   (else (unknown-extension-block-error 'specialized-block->data))))
 
 ;; TODO: turn extension blocks into meta data
 

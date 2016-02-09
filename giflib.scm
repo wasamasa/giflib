@@ -6,10 +6,10 @@
    color-map-count color-map-ref color-map-set! color-map-set*! color-map-for-each color-map-for-each-indexed
    color? create-color create-color*
    color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
-   gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
+   gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
    frame? gif-append-frame! frame-allocate-raster! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
-   frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
+   frame-append-extension-block! frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
    sub-block? make-sub-block sub-block-id sub-block-data
    comment-block? make-comment-block comment-block-text
    graphics-control-block? make-graphics-control-block graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
@@ -54,7 +54,7 @@
 (define GifFreeMapObject (foreign-lambda void "GifFreeMapObject" (c-pointer (struct "ColorMapObject"))))
 (define GifMakeSavedImage (foreign-lambda (c-pointer (struct "SavedImage")) "GifMakeSavedImage" (c-pointer (struct "GifFileType")) (const (c-pointer (struct "SavedImage")))))
 (define GifFreeSavedImages (foreign-lambda void "GifFreeSavedImages" (c-pointer (struct "GifFileType"))))
-;; TODO: extension blocks
+(define GifAddExtensionBlock (foreign-lambda int "GifAddExtensionBlock" (c-pointer int) (c-pointer (c-pointer (struct "ExtensionBlock"))) int unsigned-int u8vector))
 
 ;; gif_err.c
 (define GifErrorString (foreign-lambda c-string "GifErrorString" int))
@@ -77,7 +77,9 @@
 (define GifFileType->ImageCount (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->ImageCount);"))
 (define GifFileType->SavedImage (foreign-lambda* (c-pointer (struct "SavedImage")) (((c-pointer (struct "GifFileType")) gif) (int i)) "C_return(&(gif->SavedImages[i]));"))
 (define GifFileType->ExtensionBlockCount (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->ExtensionBlockCount);"))
+(define GifFileType->ExtensionBlockCount* (foreign-lambda* (c-pointer int) (((c-pointer (struct "GifFileType")) gif)) "C_return(&(gif->ExtensionBlockCount));"))
 (define GifFileType->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "GifFileType")) gif) (int i)) "C_return(&(gif->ExtensionBlocks[i]));"))
+(define GifFileType->ExtensionBlocks* (foreign-lambda* (c-pointer (c-pointer (struct "ExtensionBlock"))) (((c-pointer (struct "GifFileType")) gif)) "C_return(&(gif->ExtensionBlocks));"))
 (define GifFileType->Error (foreign-lambda* int (((c-pointer (struct "GifFileType")) gif)) "C_return(gif->Error);"))
 
 ;; ColorMapObject
@@ -118,7 +120,9 @@
 (define SavedImage->ColorMap (foreign-lambda* (c-pointer (struct "ColorMapObject")) (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ImageDesc.ColorMap);"))
 (define SavedImage->ColorMap-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) ((c-pointer (struct "ColorMapObject")) color_map)) "frame->ImageDesc.ColorMap = color_map;"))
 (define SavedImage->ExtensionBlockCount (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ExtensionBlockCount);"))
+(define SavedImage->ExtensionBlockCount* (foreign-lambda* (c-pointer int) (((c-pointer (struct "SavedImage")) frame)) "C_return(&(frame->ExtensionBlockCount));"))
 (define SavedImage->ExtensionBlock (foreign-lambda* (c-pointer (struct "ExtensionBlock")) (((c-pointer (struct "SavedImage")) frame) (int i)) "C_return(&(frame->ExtensionBlocks[i]));"))
+(define SavedImage->ExtensionBlocks* (foreign-lambda* (c-pointer (c-pointer (struct "ExtensionBlock"))) (((c-pointer (struct "SavedImage")) frame)) "C_return(&(frame->ExtensionBlocks));"))
 (define SavedImage->pixel (foreign-lambda* unsigned-byte (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y)) "C_return(frame->RasterBits[y*width+x]);"))
 (define SavedImage->pixel-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (int width) (int x) (int y) (unsigned-byte color)) "frame->RasterBits[y*width+x] = color;"))
 (define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int i)) "memcpy(dest, frame->RasterBits + i * width, width * sizeof(unsigned char));"))
@@ -336,6 +340,18 @@
   (and-let* ((gif* (gif-pointer gif))
              (color-map* (color-map-pointer color-map)))
     (GifFileType->SColorMap-set! gif* color-map*)))
+
+(define (gif-append-extension-block! gif block)
+  (and-let* ((gif* (gif-pointer gif)))
+    (let* ((data (specialized-block->data block))
+           (length (u8vector-length data))
+           (function (specialized-block->function block))
+           (extension-block-count* (GifFileType->ExtensionBlockCount* gif*))
+           (extension-blocks* (GifFileType->ExtensionBlocks* gif*)))
+      (when (= (GifAddExtensionBlock extension-block-count* extension-blocks*
+                                     function length data)
+               GIF_ERROR)
+        (giflib-error "Failed adding extension block" 'gif-append-extension-block!)))))
 
 (define (gif-extension-block-count gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -642,6 +658,18 @@
             (type-error row-length "correct width" 'frame-rows-set!))
           (SavedImage->row-set! frame* row width i)
           (loop (add1 i)))))))
+
+(define (frame-append-extension-block! frame block)
+  (let* ((data (specialized-block->data block))
+         (length (u8vector-length data))
+         (function (specialized-block->function block))
+         (frame* (frame-pointer frame))
+         (extension-block-count* (SavedImage->ExtensionBlockCount* frame*))
+         (extension-blocks* (SavedImage->ExtensionBlocks* frame*)))
+    (when (= (GifAddExtensionBlock extension-block-count* extension-blocks*
+                                   function length data)
+             GIF_ERROR)
+      (giflib-error "Failed adding extension block" 'frame-append-extension-block!))))
 
 (define (frame-extension-block-count frame)
   (SavedImage->ExtensionBlockCount (frame-pointer frame)))

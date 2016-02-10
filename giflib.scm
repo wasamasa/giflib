@@ -554,25 +554,33 @@
   (SavedImage->Width (frame-pointer frame)))
 
 (define (frame-width-set! frame width)
-  (SavedImage->Width-set! (frame-pointer frame) width))
+  (if (not (negative? width))
+      (SavedImage->Width-set! (frame-pointer frame) width)
+      (type-error width "non-negative width" 'frame-width-set!)))
 
 (define (frame-height frame)
   (SavedImage->Height (frame-pointer frame)))
 
 (define (frame-height-set! frame height)
-  (SavedImage->Height-set! (frame-pointer frame) height))
+  (if (not (negative? height))
+      (SavedImage->Height-set! (frame-pointer frame) height)
+      (type-error height "non-negative height" 'frame-height-set!)))
 
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
 
 (define (frame-left-set! frame left)
-  (SavedImage->Left-set! (frame-pointer frame) left))
+  (if (not (negative? left))
+      (SavedImage->Left-set! (frame-pointer frame) left)
+      (type-error left "non-negative left" 'frame-left-set!)))
 
 (define (frame-top frame)
   (SavedImage->Top (frame-pointer frame)))
 
 (define (frame-top-set! frame top)
-  (SavedImage->Top-set! (frame-pointer frame) top))
+  (if (not (negative? top))
+      (SavedImage->Top-set! (frame-pointer frame) top)
+      (type-error top "non-negative top" 'frame-top-set!)))
 
 (define (frame-interlaced? frame)
   (SavedImage->Interlace (frame-pointer frame)))

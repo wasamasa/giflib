@@ -8,7 +8,7 @@
    color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
    gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
-   frame? gif-append-frame! frame-allocate-raster! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
+   frame? gif-append-frame! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
    frame-append-extension-block! frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
    sub-block? make-sub-block sub-block-id sub-block-data
    comment-block? make-comment-block comment-block-text
@@ -140,7 +140,7 @@
 ;;; auxiliary records
 
 (define-record gif mode pointer)
-(define-record frame pointer)
+(define-record frame raster-allocated? pointer)
 (define-record color-map pointer)
 (define-record color pointer)
 (define-record sub-block id data)
@@ -217,6 +217,15 @@
      'location location
      'message "Unpacking error")
     (make-property-condition 'match))))
+
+(define (usage-error message location)
+  (abort
+   (make-composite-condition
+    (make-property-condition
+     'exn
+     'location location
+     'message message)
+    (make-property-condition 'usage))))
 
 ;;; setting up and tearing down gifs
 
@@ -391,7 +400,7 @@
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (if (and (>= index 0) (< index count))
-          (make-frame (GifFileType->SavedImage gif* index))
+          (make-frame #t (GifFileType->SavedImage gif* index))
           (oob-error index count 'gif-frame-ref)))))
 
 (define (gif-frame-for-each proc gif)
@@ -399,7 +408,7 @@
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))
         (when (< i count)
-          (proc (make-frame (GifFileType->SavedImage gif* i)))
+          (proc (make-frame #t (GifFileType->SavedImage gif* i)))
           (loop (add1 i)))))))
 
 (define (gif-frame-for-each-indexed proc gif)
@@ -407,7 +416,7 @@
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))
         (when (< i count)
-          (proc (make-frame (GifFileType->SavedImage gif* i)) i)
+          (proc (make-frame #t (GifFileType->SavedImage gif* i)) i)
           (loop (add1 i)))))))
 
 ;; TODO: add starred versions taking disposal and offsets into account
@@ -540,31 +549,37 @@
 ;; free all of them at once
 (define (gif-append-frame! gif #!optional frame)
   (and-let* ((gif* (gif-pointer gif)))
-    (make-frame (GifMakeSavedImage gif* (if frame (frame-pointer frame) #f)))))
-
-(define (frame-allocate-raster! frame)
-  (let ((frame* (frame-pointer frame)))
-    (when (zero? (SavedImage->Width frame*))
-      (type-error 0 "positive width" 'frame-allocate-raster!))
-    (when (zero? (SavedImage->Height frame*))
-      (type-error 0 "positive height" 'frame-allocate-raster!))
-    (SavedImage->realloc (frame-pointer frame))))
+    (make-frame #f (GifMakeSavedImage gif* (if frame (frame-pointer frame) #f)))))
 
 (define (frame-width frame)
   (SavedImage->Width (frame-pointer frame)))
 
 (define (frame-width-set! frame width)
-  (if (not (negative? width))
-      (SavedImage->Width-set! (frame-pointer frame) width)
-      (type-error width "non-negative width" 'frame-width-set!)))
+  (let* ((frame* (frame-pointer frame))
+         (old-width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*)))
+    (if (positive? width)
+        (begin
+          (SavedImage->Width-set! frame* width)
+          (when (and (not (= old-width width)) (positive? height))
+            (SavedImage->realloc frame*)
+            (frame-raster-allocated?-set! frame #t)))
+        (type-error width "positive width" 'frame-width-set!))))
 
 (define (frame-height frame)
   (SavedImage->Height (frame-pointer frame)))
 
 (define (frame-height-set! frame height)
-  (if (not (negative? height))
-      (SavedImage->Height-set! (frame-pointer frame) height)
-      (type-error height "non-negative height" 'frame-height-set!)))
+  (let* ((frame* (frame-pointer frame))
+         (old-height (SavedImage->Height frame*))
+         (width (SavedImage->Width frame*)))
+    (if (positive? height)
+        (begin
+          (SavedImage->Height-set! frame* height)
+          (when (and (not (= old-height height)) (positive? width))
+            (SavedImage->realloc frame*)
+            (frame-raster-allocated?-set! frame #t)))
+        (type-error height "positive height" 'frame-height-set!))))
 
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
@@ -612,6 +627,8 @@
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*)))
+    (when (not (frame-raster-allocated? frame))
+      (usage-error "Set width and height first" 'frame-pixel-set!))
     (if (and (>= x 0) (>= y 0)
              (< x width) (< y height))
         (SavedImage->pixel-set! frame* width x y index)
@@ -633,6 +650,8 @@
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*))
          (row-length (u8vector-length row)))
+    (when (not (frame-raster-allocated? frame))
+      (usage-error "Set width and height first" 'frame-pixel-set!))
     (when (not (and (>= index 0) (< index height)))
       (oob-error index height 'frame-row-set!))
     (when (not (= row-length width))
@@ -656,6 +675,8 @@
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*)))
+    (when (not (frame-raster-allocated? frame))
+      (usage-error "Set width and height first" 'frame-pixel-set!))
     (when (not (= (vector-length rows) height))
       (type-error (vector-length rows) "correct length" 'frame-rows-set!))
     (let loop ((i 0))

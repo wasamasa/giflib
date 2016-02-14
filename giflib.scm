@@ -6,10 +6,10 @@
    color-map-count color-map-ref color-map-set! color-map-set*! color-map-for-each color-map-for-each-indexed
    color? create-color create-color*
    color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
-   gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed
+   gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed gif-extension-blocks gif-metadata
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
    frame? gif-append-frame! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
-   frame-append-extension-block! frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed
+   frame-append-extension-block! frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed frame-extension-blocks frame-metadata
    sub-block? make-sub-block sub-block-id sub-block-data
    comment-block? make-comment-block comment-block-text
    graphics-control-block? make-graphics-control-block graphics-control-block-disposal graphics-control-block-user-input? graphics-control-block-delay graphics-control-block-transparency-index
@@ -104,7 +104,6 @@
 (define ExtensionBlock->ByteCount (foreign-lambda* int (((c-pointer (struct "ExtensionBlock")) extension_block)) "C_return(extension_block->ByteCount);"))
 (define ExtensionBlock->Bytes (foreign-lambda* (c-pointer unsigned-byte) (((c-pointer (struct "ExtensionBlock")) extension_block)) "C_return(extension_block->Bytes);"))
 (define ExtensionBlock->u8vector (foreign-lambda* void ((u8vector dest) ((c-pointer unsigned-byte) src) (int size)) "memcpy(dest, src, size * sizeof(unsigned char));"))
-;; TODO: extension block mutators
 
 ;; SavedImage
 (define SavedImage->Width (foreign-lambda* int (((c-pointer (struct "SavedImage")) frame)) "C_return(frame->ImageDesc.Width);"))
@@ -146,7 +145,6 @@
 (define-record sub-block id data)
 (define-record comment-block text)
 (define-record graphics-control-block disposal user-input? delay transparency-index)
-;; see also http://www.vurdalakov.net/misc/gif
 (define-record application-block identifier auth-code)
 (define-record text-block grid-left grid-top grid-width grid-height cell-width cell-height fg-index bg-index)
 
@@ -226,6 +224,15 @@
      'location location
      'message message)
     (make-property-condition 'usage))))
+
+(define (metadata-error message location)
+  (abort
+   (make-composite-condition
+    (make-property-condition
+     'exn
+     'location location
+     'message message)
+    (make-property-condition 'metadata))))
 
 ;;; setting up and tearing down gifs
 
@@ -391,6 +398,22 @@
           (let ((extension-block* (GifFileType->ExtensionBlock gif* i)))
             (proc (ExtensionBlock->specialized-block extension-block*) i)
             (loop (add1 i))))))))
+
+(define (gif-extension-blocks gif)
+  (and-let* ((gif* (gif-pointer gif)))
+    (let ((count (GifFileType->ExtensionBlockCount gif*)))
+      (let loop ((i 0) (acc '()))
+        (if (< i count)
+            (let* ((extension-block* (GifFileType->ExtensionBlock gif* i))
+                   (extension-block (ExtensionBlock->specialized-block extension-block*)))
+              (loop (add1 i) (cons extension-block acc)))
+            (reverse acc))))))
+
+(define (gif-metadata gif)
+  (let ((blocks (gif-extension-blocks gif)))
+    (if (null? blocks)
+        #f
+        (map block-run->metadata (chunk-extension-blocks blocks)))))
 
 (define (gif-frame-count gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -729,6 +752,22 @@
           (proc (ExtensionBlock->specialized-block extension-block*) i)
           (loop (add1 i)))))))
 
+(define (frame-extension-blocks frame)
+  (let* ((frame* (frame-pointer frame))
+         (count (SavedImage->ExtensionBlockCount frame*)))
+    (let loop ((i 0) (acc '()))
+      (if (< i count)
+          (let* ((extension-block* (SavedImage->ExtensionBlock frame* i))
+                 (extension-block (ExtensionBlock->specialized-block extension-block*)))
+            (loop (add1 i) (cons extension-block acc)))
+          (reverse acc)))))
+
+(define (frame-metadata gif)
+  (let ((blocks (frame-extension-blocks gif)))
+    (if (null? blocks)
+        #f
+        (map block-run->metadata (chunk-extension-blocks blocks)))))
+
 ;;; extension blocks
 
 ;; packing and unpacking
@@ -868,6 +907,71 @@
    ((application-block? block) APPLICATION_EXT_FUNC_CODE)
    (else (unknown-extension-block-error 'specialized-block->data))))
 
-;; TODO: turn extension blocks into meta data
+;; extension block metadata
+
+(define (sub-block->loop-count block)
+  (let* ((data (sub-block-data block))
+         ;; NOTE: data is stored LE
+         (count (+ (* (u8vector-ref data 1) 256) (u8vector-ref data 0))))
+    (if (zero? count)
+        #t
+        count)))
+
+(define (chunk-extension-blocks blocks)
+  (let loop ((blocks blocks) (acc '()) (chunk '()))
+    (if (not (null? blocks))
+        (let ((block (car blocks)))
+          (if (sub-block? block)
+              (loop (cdr blocks) acc (append chunk (list block)))
+              (if (null? chunk)
+                  (loop (cdr blocks) acc (list block))
+                  (loop blocks (append acc (list chunk)) '()))))
+        (append acc (list chunk)))))
+
+(define (block-run->metadata block-run)
+  (cond
+   ((= (length block-run) 1)
+    (let ((block (car block-run)))
+      (cond
+       ;; NOTE: comment blocks should be followed by sub blocks
+       ;; containing the text, but they are not in giflib...
+       ((comment-block? block)
+        `((comment . ,(comment-block-text block))))
+       ((graphics-control-block? block)
+        `((disposal . ,(graphics-control-block-disposal block))
+          (user-input? . ,(graphics-control-block-user-input? block))
+          (delay . ,(graphics-control-block-delay block))
+          (transparency-index . ,(graphics-control-block-transparency-index block))))
+       (else (metadata-error "Extension block not followed by mandatory sub blocks" 'block-run->metadata)))))
+   ((> (length block-run) 1)
+    (let ((start (car block-run))
+          (sub-blocks (cdr block-run)))
+      (cond
+       ((application-block? start)
+        (let ((identifier (application-block-identifier start))
+              (auth-code (application-block-auth-code start))
+              (data (map sub-block-data sub-blocks)))
+          (if (and (equal? identifier "NETSCAPE")
+                   (equal? auth-code "2.0")
+                   (= (length sub-blocks) 1))
+              `((loop . ,(sub-block->loop-count (car sub-blocks))))
+              `((application
+                 (identifier . ,identifier)
+                 (auth-code . ,auth-code)
+                 (data . ,(map sub-block-data sub-blocks)))))))
+       ;; NOTE: untested due to the lack of gifs using this feature
+       ((text-block? start)
+        `((text
+           (grid-left . ,(text-block-grid-left start))
+           (grid-top . ,(text-block-grid-top start))
+           (grid-width . ,(text-block-grid-width start))
+           (grid-height . ,(text-block-grid-height start))
+           (cell-width . ,(text-block-cell-width start))
+           (cell-height . ,(text-block-cell-height start))
+           (fg-index . ,(text-block-fg-index start))
+           (bg-index . ,(text-block-bg-index start))
+           (data . ,(map sub-block-data sub-blocks)))))
+       (else (metadata-error "Self-contained extension block followed by sub blocks" 'block-run->metadata)))))
+   (else (metadata-error "Invalid extension block run" 'block-run->metadata))))
 
 )

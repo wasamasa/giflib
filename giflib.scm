@@ -1,5 +1,5 @@
 (module giflib
-  (gif? open-gif create-gif slurp-gif spew-gif close-gif
+  (gif? open-gif open-gif* create-gif slurp-gif spew-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
    gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!
    gif-color-map gif-color-map-set! create-color-map color-map? color-map-resolution color-map-sorted?
@@ -41,6 +41,7 @@
 
 ;; dgif_lib.c
 (define DGifOpenFileName (foreign-lambda (c-pointer (struct "GifFileType")) "DGifOpenFileName" c-string (c-pointer int)))
+(define DGifOpenFileHandle (foreign-lambda (c-pointer (truct "GifFileType")) "DGifOpenFileHandle" int (c-pointer int)))
 (define DGifSlurp (foreign-lambda int "DGifSlurp" (c-pointer (struct "GifFileType"))))
 (define DGifCloseFile (foreign-lambda int "DGifCloseFile" (c-pointer (struct "GifFileType")) (c-pointer int)))
 
@@ -242,6 +243,13 @@
       (if gif*
           (set-finalizer! (make-gif 'read gif*) close-gif)
           (giflib-error status 'open-gif)))))
+
+(define (open-gif* fd)
+  (let-location ((status int 0))
+    (let ((gif* (DGifOpenFileHandle fd (location status))))
+      (if gif*
+          (set-finalizer! (make-gif 'read gif*) close-gif)
+          (abort (giflib-error status 'open-gif*))))))
 
 (define (create-gif filename #!optional overwrite?)
   (let-location ((status int 0))

@@ -151,89 +151,39 @@
 
 ;;; errors
 
+(define (define-error location message . condition)
+  (let ((base (make-property-condition 'exn 'location location 'message message))
+        (extra (apply make-property-condition condition)))
+    (make-composite-condition base extra)))
+
 (define (giflib-error status location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message (GifErrorString status))
-    (make-property-condition
-     'giflib
-     'code status))))
+  (define-error location (GifErrorString status) 'giflib 'code status))
 
 (define (oob-error index count location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message (format "Out of bounds: ~a / ~a" index count))
-    (make-property-condition 'bounds))))
+  (define-error location (format "Out of bounds: ~a / ~a" index count) 'bounds))
 
 (define (interval-error value lower-bound upper-bound location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message (format "Value ~a outside interval [~a ~a]"
-                      value lower-bound upper-bound))
-    (make-property-condition 'range))))
+  (define-error location (format "Value ~a outside interval [~a ~a]"
+                                 value lower-bound upper-bound) 'range))
 
 (define (type-error value expected location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message (format "Bad argument type - not a ~a: ~a" expected value))
-    (make-property-condition 'type))))
+  (define-error location (format "Bad argument type - not a ~a: ~a"
+                                 expected value) 'type))
 
 (define (unknown-extension-block-error location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message "Unknown extension block")
-    (make-property-condition 'match))))
+  (define-error location "Unknown extension block" 'match))
 
 (define (unknown-disposal-error location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message "Unknown disposal")
-    (make-property-condition 'match))))
+  (define-error location "Unknown disposal" 'match))
 
 (define (unpack-error location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message "Unpacking error")
-    (make-property-condition 'match))))
+  (define-error location "Unpacking error" 'match))
 
 (define (usage-error message location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message message)
-    (make-property-condition 'usage))))
+  (define-error location message 'usage))
 
 (define (metadata-error message location)
-  (abort
-   (make-composite-condition
-    (make-property-condition
-     'exn
-     'location location
-     'message message)
-    (make-property-condition 'metadata))))
+  (define-error location message 'metadata))
 
 ;;; setting up and tearing down gifs
 
@@ -242,7 +192,7 @@
     (let ((gif* (DGifOpenFileName filename (location status))))
       (if gif*
           (set-finalizer! (make-gif 'read gif*) close-gif)
-          (giflib-error status 'open-gif)))))
+          (abort (giflib-error status 'open-gif))))))
 
 (define (open-gif* fd)
   (let-location ((status int 0))
@@ -256,18 +206,18 @@
     (let ((gif* (EGifOpenFileName filename (not overwrite?) (location status))))
       (if gif*
           (set-finalizer! (make-gif 'write gif*) close-gif)
-          (giflib-error status 'create-gif)))))
+          (abort (giflib-error status 'create-gif))))))
 
 (define (slurp-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
     (when (= (DGifSlurp gif*) GIF_ERROR)
-      (giflib-error (GifFileType->Error gif*) 'slurp-gif))))
+      (abort (giflib-error (GifFileType->Error gif*) 'slurp-gif)))))
 
 (define (spew-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
     ;; TODO: sanity checks (like frame dimensions)
     (when (= (EGifSpew gif*) GIF_ERROR)
-      (giflib-error (GifFileType->Error gif*) 'spew-gif))
+      (abort (giflib-error (GifFileType->Error gif*) 'spew-gif)))
     ;; spewing closes the gif...
     (GifFreeSavedImages gif*)
     (free-GifFileType-ExtensionBlocks gif*)
@@ -280,7 +230,7 @@
                          ((read) DGifCloseFile)
                          ((write) EGifCloseFile))))
         (when (= (close-fun gif* (location status)) GIF_ERROR)
-          (giflib-error status 'close-gif))))
+          (abort (giflib-error status 'close-gif)))))
     (gif-pointer-set! gif #f)))
 
 ;;; gifs
@@ -309,7 +259,7 @@
   (and-let* ((gif* (gif-pointer gif)))
     (if (and (> resolution 0) (<= resolution 8))
         (GifFileType->SColorResolution-set! gif* resolution)
-        (interval-error resolution 1 8 'gif-resolution-set!))))
+        (abort (interval-error resolution 1 8 'gif-resolution-set!)))))
 
 (define (gif-bg-index gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -319,7 +269,7 @@
   (and-let* ((gif* (gif-pointer gif)))
     (if (and (>= bg-index 0) (< bg-index 256))
         (GifFileType->SBackGroundColor-set! gif* bg-index)
-        (interval-error bg-index 0 255 'gif-bg-index-set!))))
+        (abort (interval-error bg-index 0 255 'gif-bg-index-set!)))))
 
 (define epsilon 1e-6)
 
@@ -349,9 +299,10 @@
                  (or (< (abs (- upper-bound aspect-ratio)) epsilon)
                      (< aspect-ratio upper-bound)))
             (GifFileType->AspectByte-set! gif* (aspect-ratio->byte aspect-ratio))
-            (interval-error aspect-ratio lower-bound upper-bound
-                            'gif-aspect-ratio-set!))))
-     (else (type-error aspect-ratio "number or #f" 'gif-aspect-ratio-set!)))))
+            (abort (interval-error aspect-ratio lower-bound upper-bound
+                                   'gif-aspect-ratio-set!)))))
+     (else (abort (type-error aspect-ratio "number or #f"
+                              'gif-aspect-ratio-set!))))))
 
 (define (gif-color-map gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -375,7 +326,8 @@
       (when (= (GifAddExtensionBlock extension-block-count* extension-blocks*
                                      function length data)
                GIF_ERROR)
-        (giflib-error "Failed adding extension block" 'gif-append-extension-block!)))))
+        (abort (giflib-error "Failed adding extension block"
+                             'gif-append-extension-block!))))))
 
 (define (gif-extension-block-count gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -387,7 +339,7 @@
       (if (and (>= index 0) (< index count))
           (let ((extension-block* (GifFileType->ExtensionBlock gif* index)))
             (ExtensionBlock->specialized-block extension-block*))
-          (oob-error index count 'gif-extension-block-ref)))))
+          (abort (oob-error index count 'gif-extension-block-ref))))))
 
 (define (gif-extension-block-for-each proc gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -432,7 +384,7 @@
     (let ((count (GifFileType->ImageCount gif*)))
       (if (and (>= index 0) (< index count))
           (make-frame #t (GifFileType->SavedImage gif* index))
-          (oob-error index count 'gif-frame-ref)))))
+          (abort (oob-error index count 'gif-frame-ref))))))
 
 (define (gif-frame-for-each proc gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -485,7 +437,7 @@
   (if (and (>= size 0) (<= size 255))
       (let ((color-map* (if color-map (color-map-pointer color-map) #f)))
         (set-finalizer! (make-color-map (GifMakeMapObject size color-map*)) close-color-map))
-      (interval-error size 0 255 'create-color-map)))
+      (abort (interval-error size 0 255 'create-color-map))))
 
 (define (close-color-map color-map)
   (and-let* ((color-map* (color-map-pointer color-map)))
@@ -509,7 +461,7 @@
              (count (ColorMapObject->ColorCount color-map*)))
     (if (and (>= index 0) (< index count))
         (make-color (ColorMapObject->Color color-map* index))
-        (oob-error index count 'color-map-ref))))
+        (abort (oob-error index count 'color-map-ref)))))
 
 (define (color-map-set! color-map index color)
   (and-let* ((color-map* (color-map-pointer color-map))
@@ -595,7 +547,7 @@
           (when (and (not (= old-width width)) (positive? height))
             (SavedImage->realloc frame*)
             (frame-raster-allocated?-set! frame #t)))
-        (type-error width "positive width" 'frame-width-set!))))
+        (abort (type-error width "positive width" 'frame-width-set!)))))
 
 (define (frame-height frame)
   (SavedImage->Height (frame-pointer frame)))
@@ -610,7 +562,7 @@
           (when (and (not (= old-height height)) (positive? width))
             (SavedImage->realloc frame*)
             (frame-raster-allocated?-set! frame #t)))
-        (type-error height "positive height" 'frame-height-set!))))
+        (abort (type-error height "positive height" 'frame-height-set!)))))
 
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
@@ -618,7 +570,7 @@
 (define (frame-left-set! frame left)
   (if (not (negative? left))
       (SavedImage->Left-set! (frame-pointer frame) left)
-      (type-error left "non-negative left" 'frame-left-set!)))
+      (abort (type-error left "non-negative left" 'frame-left-set!))))
 
 (define (frame-top frame)
   (SavedImage->Top (frame-pointer frame)))
@@ -626,7 +578,7 @@
 (define (frame-top-set! frame top)
   (if (not (negative? top))
       (SavedImage->Top-set! (frame-pointer frame) top)
-      (type-error top "non-negative top" 'frame-top-set!)))
+      (abort (type-error top "non-negative top" 'frame-top-set!))))
 
 (define (frame-interlaced? frame)
   (SavedImage->Interlace (frame-pointer frame)))
@@ -652,18 +604,20 @@
     (if (and (>= x 0) (>= y 0)
              (< x width) (< y height))
         (SavedImage->pixel frame* width x y)
-        (oob-error (format "~a|~a" x y) (format "~ax~a" width height) 'frame-pixel))))
+        (abort (oob-error (format "~a|~a" x y) (format "~ax~a" width height)
+                          'frame-pixel)))))
 
 (define (frame-pixel-set! frame x y index)
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*)))
     (when (not (frame-raster-allocated? frame))
-      (usage-error "Set width and height first" 'frame-pixel-set!))
+      (abort (usage-error "Set width and height first" 'frame-pixel-set!)))
     (if (and (>= x 0) (>= y 0)
              (< x width) (< y height))
         (SavedImage->pixel-set! frame* width x y index)
-        (oob-error (format "~a|~a" x y) (format "~ax~a" width height) 'frame-pixel-set!))))
+        (abort (oob-error (format "~a|~a" x y) (format "~ax~a" width height)
+                          'frame-pixel-set!)))))
 
 (define (frame-row frame index)
   (let* ((frame* (frame-pointer frame))
@@ -674,7 +628,7 @@
         (begin
           (SavedImage->row frame* row width index)
           row)
-        (oob-error index height 'frame-row))))
+        (abort (oob-error index height 'frame-row)))))
 
 (define (frame-row-set! frame index row)
   (let* ((frame* (frame-pointer frame))
@@ -682,11 +636,11 @@
          (height (SavedImage->Height frame*))
          (row-length (u8vector-length row)))
     (when (not (frame-raster-allocated? frame))
-      (usage-error "Set width and height first" 'frame-pixel-set!))
+      (abort (usage-error "Set width and height first" 'frame-pixel-set!)))
     (when (not (and (>= index 0) (< index height)))
-      (oob-error index height 'frame-row-set!))
+      (abort (oob-error index height 'frame-row-set!)))
     (when (not (= row-length width))
-      (type-error row-length "correct length" 'frame-row-set!))
+      (abort (type-error row-length "correct length" 'frame-row-set!)))
     (SavedImage->row-set! frame* row width index)))
 
 (define (frame-rows frame)
@@ -707,15 +661,15 @@
          (width (SavedImage->Width frame*))
          (height (SavedImage->Height frame*)))
     (when (not (frame-raster-allocated? frame))
-      (usage-error "Set width and height first" 'frame-pixel-set!))
+      (abort (usage-error "Set width and height first" 'frame-pixel-set!)))
     (when (not (= (vector-length rows) height))
-      (type-error (vector-length rows) "correct length" 'frame-rows-set!))
+      (abort (type-error (vector-length rows) "correct length" 'frame-rows-set!)))
     (let loop ((i 0))
       (when (< i height)
         (let* ((row (vector-ref rows i))
                (row-length (u8vector-length row)))
           (when (not (= row-length width))
-            (type-error row-length "correct width" 'frame-rows-set!))
+            (abort (type-error row-length "correct width" 'frame-rows-set!)))
           (SavedImage->row-set! frame* row width i)
           (loop (add1 i)))))))
 
@@ -729,7 +683,8 @@
     (when (= (GifAddExtensionBlock extension-block-count* extension-blocks*
                                    function length data)
              GIF_ERROR)
-      (giflib-error "Failed adding extension block" 'frame-append-extension-block!))))
+      (abort (giflib-error "Failed adding extension block"
+                           'frame-append-extension-block!)))))
 
 (define (frame-extension-block-count frame)
   (SavedImage->ExtensionBlockCount (frame-pointer frame)))
@@ -740,7 +695,7 @@
     (if (and (>= index 0) (< index count))
         (let ((extension-block* (SavedImage->ExtensionBlock frame* index)))
           (ExtensionBlock->specialized-block extension-block*))
-        (oob-error index count 'frame-extension-block-ref))))
+        (abort (oob-error index count 'frame-extension-block-ref)))))
 
 (define (frame-extension-block-for-each proc frame)
   (let* ((frame* (frame-pointer frame))
@@ -788,7 +743,7 @@
   (bitmatch data
     (((sub-block bitpacket))
      (make-sub-block id (bitstring->u8vector data)))
-    (else (unpack-error 'data->sub-block))))
+    (else (abort (unpack-error 'data->sub-block)))))
 
 (define (sub-block->data block)
   (let ((id (sub-block-id block))
@@ -818,9 +773,9 @@
         ((DISPOSE_DO_NOT) 'none)
         ((DISPOSE_BACKGROUND) 'background)
         ((DISPOSE_PREVIOUS) 'previous)
-        (else (unknown-disposal-error 'data->graphics-control-block)))
+        (else (abort (unknown-disposal-error 'data->graphics-control-block))))
       user-input? delay-time (and transparency-index? transparency-index)))
-    (else (unpack-error 'data->graphics-control-block))))
+    (else (abort (unpack-error 'data->graphics-control-block)))))
 
 (define (graphics-control-block->data block)
   (let ((reserved 0)
@@ -830,7 +785,7 @@
            ((none) DISPOSE_DO_NOT)
            ((background) DISPOSE_BACKGROUND)
            ((previous) DISPOSE_PREVIOUS)
-           (else (unknown-disposal-error 'graphics-control-block->data))))
+           (else (abort (unknown-disposal-error 'graphics-control-block->data)))))
         (user-input? (graphics-control-block-user-input? block))
         (transparency-index? (and (graphics-control-block-transparency-index block) #t))
         (delay-time (graphics-control-block-delay block))
@@ -852,7 +807,7 @@
     (((text-block bitpacket))
      (make-text-block grid-left grid-top grid-width grid-height
                       cell-width cell-height fg-index bg-index))
-    (else (unpack-error 'data->text-block))))
+    (else (abort (unpack-error 'data->text-block)))))
 
 (define (text-block->data block)
   (let ((grid-left (text-block-grid-left block))
@@ -874,7 +829,7 @@
     (((application-block bitpacket))
      (make-application-block (bitstring->string identifier)
                              (bitstring->string auth-code)))
-    (else (unpack-error 'data->application-block))))
+    (else (abort (unpack-error 'data->application-block)))))
 
 (define (application-block->data block)
   (let ((identifier (application-block-identifier block))
@@ -895,7 +850,7 @@
       ((GRAPHICS_EXT_FUNC_CODE) (data->graphics-control-block data))
       ((PLAINTEXT_EXT_FUNC_CODE) (data->text-block data))
       ((APPLICATION_EXT_FUNC_CODE) (data->application-block data))
-      (else (unknown-extension-block-error 'ExtensionBlock->specialized-block)))))
+      (else (abort (unknown-extension-block-error 'ExtensionBlock->specialized-block))))))
 
 (define (specialized-block->data block)
   (cond
@@ -904,7 +859,7 @@
    ((graphics-control-block? block) (graphics-control-block->data block))
    ((text-block? block) (text-block->data block))
    ((application-block? block) (application-block->data block))
-   (else (unknown-extension-block-error 'specialized-block->data))))
+   (else (abort (unknown-extension-block-error 'specialized-block->data)))))
 
 (define (specialized-block->function block)
   (cond
@@ -913,7 +868,7 @@
    ((graphics-control-block? block) GRAPHICS_EXT_FUNC_CODE)
    ((text-block? block) PLAINTEXT_EXT_FUNC_CODE)
    ((application-block? block) APPLICATION_EXT_FUNC_CODE)
-   (else (unknown-extension-block-error 'specialized-block->data))))
+   (else (abort (unknown-extension-block-error 'specialized-block->data)))))
 
 ;; extension block metadata
 
@@ -950,7 +905,8 @@
           (user-input? . ,(graphics-control-block-user-input? block))
           (delay . ,(graphics-control-block-delay block))
           (transparency-index . ,(graphics-control-block-transparency-index block))))
-       (else (metadata-error "Extension block not followed by mandatory sub blocks" 'block-run->metadata)))))
+       (else (abort (metadata-error "Extension block not followed by mandatory sub blocks"
+                                    'block-run->metadata))))))
    ((> (length block-run) 1)
     (let ((start (car block-run))
           (sub-blocks (cdr block-run)))
@@ -979,7 +935,8 @@
            (fg-index . ,(text-block-fg-index start))
            (bg-index . ,(text-block-bg-index start))
            (data . ,(map sub-block-data sub-blocks)))))
-       (else (metadata-error "Self-contained extension block followed by sub blocks" 'block-run->metadata)))))
-   (else (metadata-error "Invalid extension block run" 'block-run->metadata))))
+       (else (abort (metadata-error "Self-contained extension block followed by sub blocks"
+                                    'block-run->metadata))))))
+   (else (abort (metadata-error "Invalid extension block run" 'block-run->metadata)))))
 
 )

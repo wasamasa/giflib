@@ -19,7 +19,7 @@
 (import chicken scheme foreign extras)
 (use srfi-4 bitstring)
 
-(foreign-declare "#include <gif_lib.h>")
+(foreign-declare "#include \"gif_lib.h\"")
 
 ;;; foreign constants
 

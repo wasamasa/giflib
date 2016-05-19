@@ -139,6 +139,8 @@
 
 ;;; auxiliary records
 
+;; TODO: define record printers
+
 (define-record gif mode pointer)
 (define-record frame raster-allocated? pointer)
 (define-record color-map pointer)
@@ -234,6 +236,8 @@
     (gif-pointer-set! gif #f)))
 
 ;;; gifs
+
+;; TODO: define SRFI-17 setters
 
 (define (gif-width gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -401,35 +405,6 @@
         (when (< i count)
           (proc (make-frame #t (GifFileType->SavedImage gif* i)) i)
           (loop (add1 i)))))))
-
-;; TODO: add starred versions taking disposal and offsets into account
-;; NOTE: alternatively write something unoptimizing a given gif or
-;; simply accessors that interpret coordinates differently
-;; NOTE: https://github.com/muennich/sxiv/blob/master/image.c#L147-L155
-
-;; 01: 5x5 of 1s at 0|0
-
-;; 1111111111
-;; 1111111111
-;; 1111111111
-;; 1111111111
-;; 1111111111
-
-;; 02: 3x3 of 0s at 1|1
-
-;; 1111111111
-;; 1100000011
-;; 1100000011
-;; 1100000011
-;; 1111111111
-
-;; 03: 1x1 of 1s at 2|2
-
-;; 1111111111
-;; 1100000011
-;; 1100110011
-;; 1100000011
-;; 1111111111
 
 ;;; color maps
 
@@ -938,5 +913,11 @@
        (else (abort (metadata-error "Self-contained extension block followed by sub blocks"
                                     'block-run->metadata))))))
    (else (abort (metadata-error "Invalid extension block run" 'block-run->metadata)))))
+
+;;; TODO: imlib2 interface
+
+;; (define (gif->iblib2-frames gif))
+;; (define (gif-imlib2-frame-for-each proc gif))
+;; (define (gif-imlib2-frame-for-each-indexed proc gif))
 
 )

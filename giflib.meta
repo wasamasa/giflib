@@ -1,6 +1,6 @@
 ((synopsis "Bindings to giflib")
  (author "Vasilij Schneidermann")
- (license "BSD")
+ (license "MIT")
  (category graphics)
  (depends bitstring)
  (foreign-depends "giflib-5.0"))

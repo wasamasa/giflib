@@ -938,10 +938,5 @@
                                     'block-run->metadata))))))
    (else (abort (metadata-error "Invalid extension block run" 'block-run->metadata)))))
 
-;;; TODO: imlib2 interface
-
-;; (define (gif->iblib2-frames gif))
-;; (define (gif-imlib2-frame-for-each proc gif))
-;; (define (gif-imlib2-frame-for-each-indexed proc gif))
 
 )

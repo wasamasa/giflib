@@ -1,7 +1,11 @@
-(compile -s -O3 -d1 "giflib.scm" -j giflib -lgif)
+(compile -s -O3 -d1 "giflib.scm" -J -lgif)
 (compile -s "giflib.import.scm")
+
+(compile -s -O4 -d1 "giflib-imlib2.scm" -J -lgif)
+(compile -s "giflib-imlib2.import.scm")
 
 (install-extension
  'giflib
- '("giflib.so" "giflib.import.so")
- '((version "0.0")))
+ '("giflib.so" "giflib.import.so"
+   "giflib-imlib2.so" "giflib-imlib2.import.so")
+ '((version "0.1")))

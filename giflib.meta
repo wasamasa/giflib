@@ -2,5 +2,5 @@
  (author "Vasilij Schneidermann")
  (license "MIT")
  (category graphics)
- (depends bitstring)
+ (depends bitstring imlib2)
  (foreign-depends "giflib-5.0"))

@@ -176,8 +176,8 @@
 (define (unknown-extension-block-error location)
   (define-error location "Unknown extension block" 'match))
 
-(define (unknown-disposal-error location)
-  (define-error location "Unknown disposal" 'match))
+(define (unknown-disposal-error disposal location)
+  (define-error location (format "Unknown disposal ~a" disposal) 'match))
 
 (define (unpack-error location)
   (define-error location "Unpacking error" 'match))
@@ -749,7 +749,7 @@
         ((DISPOSE_DO_NOT) 'none)
         ((DISPOSE_BACKGROUND) 'background)
         ((DISPOSE_PREVIOUS) 'previous)
-        (else (abort (unknown-disposal-error 'data->graphics-control-block))))
+        (else (abort (unknown-disposal-error disposal 'data->graphics-control-block))))
       user-input? delay-time (and transparency-index? transparency-index)))
     (else (abort (unpack-error 'data->graphics-control-block)))))
 
@@ -761,7 +761,7 @@
            ((none) DISPOSE_DO_NOT)
            ((background) DISPOSE_BACKGROUND)
            ((previous) DISPOSE_PREVIOUS)
-           (else (abort (unknown-disposal-error 'graphics-control-block->data)))))
+           (else (abort (unknown-disposal-error block 'graphics-control-block->data)))))
         (user-input? (graphics-control-block-user-input? block))
         (transparency-index? (and (graphics-control-block-transparency-index block) #t))
         (delay-time (graphics-control-block-delay block))

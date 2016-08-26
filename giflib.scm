@@ -8,7 +8,7 @@
    color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
    gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed gif-extension-blocks gif-metadata
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
-   frame? gif-append-frame! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set!
+   frame? gif-append-frame! frame-width frame-width-set! frame-height frame-height-set! frame-left frame-left-set! frame-top frame-top-set! frame-interlaced? frame-interlaced?-set! frame-color-map frame-color-map-set! frame-pixel frame-pixel-set! frame-row frame-row-set! frame-rows frame-rows-set! frame-pixels frame-pixels-set!
    frame-append-extension-block! frame-extension-block-count frame-extension-block-ref frame-extension-block-for-each frame-extension-block-for-each-indexed frame-extension-blocks frame-metadata
    sub-block? make-sub-block sub-block-id sub-block-data
    comment-block? make-comment-block comment-block-text
@@ -129,6 +129,8 @@
 (define SavedImage->row (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int width) (int i)) "memcpy(dest, frame->RasterBits + i * width, width * sizeof(unsigned char));"))
 (define SavedImage->row-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector src) (int width) (int i)) "memcpy(frame->RasterBits + i * width, src, width * sizeof(unsigned char));"))
 (define SavedImage->realloc (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame)) "free(frame->RasterBits); frame->RasterBits = calloc(frame->ImageDesc.Width * frame->ImageDesc.Height, sizeof(unsigned char));"))
+(define SavedImage->pixels (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector dest) (int size)) "memcpy(dest, frame->RasterBits, size * sizeof(unsigned char));"))
+(define SavedImage->pixels-set! (foreign-lambda* void (((c-pointer (struct "SavedImage")) frame) (u8vector src) (int size)) "memcpy(frame->RasterBits, src, size * sizeof(unsigned char));"))
 
 ;; various
 
@@ -648,6 +650,27 @@
             (abort (type-error row-length "correct width" 'frame-rows-set!)))
           (SavedImage->row-set! frame* row width i)
           (loop (add1 i)))))))
+
+(define (frame-pixels frame)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*))
+         (size (* width height))
+         (data (make-u8vector size)))
+    (SavedImage->pixels frame* data size)
+    data))
+
+(define (frame-pixels-set! frame pixels)
+  (let* ((frame* (frame-pointer frame))
+         (width (SavedImage->Width frame*))
+         (height (SavedImage->Height frame*))
+         (size (* width height))
+         (pixels-length (u8vector-length pixels)))
+    (when (not (frame-raster-allocated? frame))
+      (abort (usage-error "Set width and height first" 'frame-pixels-set!)))
+    (when (not (= pixels-length size))
+      (abort (type-error size "correct length" 'frame-pixels-set!)))
+    (SavedImage->pixels-set! frame* pixels size)))
 
 (define (frame-append-extension-block! frame block)
   (let* ((data (specialized-block->data block))

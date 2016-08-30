@@ -1,5 +1,5 @@
 (module giflib
-  (gif? open-gif open-gif* create-gif slurp-gif spew-gif close-gif
+  (gif? open-gif create-gif slurp-gif spew-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
    gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!
    gif-color-map gif-color-map-set! create-color-map color-map? color-map-resolution color-map-sorted?
@@ -197,13 +197,6 @@
       (if gif*
           (set-finalizer! (make-gif 'read gif*) close-gif)
           (abort (giflib-error status 'open-gif))))))
-
-(define (open-gif* fd)
-  (let-location ((status int 0))
-    (let ((gif* (DGifOpenFileHandle fd (location status))))
-      (if gif*
-          (set-finalizer! (make-gif 'read gif*) close-gif)
-          (abort (giflib-error status 'open-gif*))))))
 
 (define (create-gif filename #!optional overwrite?)
   (let-location ((status int 0))

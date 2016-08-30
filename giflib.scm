@@ -1,5 +1,6 @@
 (module giflib
-  (gif? open-gif create-gif slurp-gif spew-gif close-gif
+  (disposal-strategy
+   gif? open-gif create-gif slurp-gif spew-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
    gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!
    gif-color-map gif-color-map-set! create-color-map color-map? color-map-resolution color-map-sorted?
@@ -176,6 +177,8 @@
 
 (define (unknown-extension-block-error location)
   (define-error location "Unknown extension block" 'match))
+
+(define disposal-strategy (make-parameter #f))
 
 (define (unknown-disposal-error disposal location)
   (define-error location (format "Unknown disposal ~a" disposal) 'match))
@@ -764,7 +767,11 @@
         ((DISPOSE_DO_NOT) 'none)
         ((DISPOSE_BACKGROUND) 'background)
         ((DISPOSE_PREVIOUS) 'previous)
-        (else (abort (unknown-disposal-error disposal 'data->graphics-control-block))))
+        (else
+         (case (disposal-strategy)
+           ((#f) (abort (unknown-disposal-error disposal 'data->graphics-control-block)))
+           ((#t) 'unknown)
+           (else => (lambda (proc) (proc disposal))))))
       user-input? delay-time (and transparency-index? transparency-index)))
     (else (abort (unpack-error 'data->graphics-control-block)))))
 

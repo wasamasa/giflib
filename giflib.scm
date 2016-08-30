@@ -783,7 +783,7 @@
            ((none) DISPOSE_DO_NOT)
            ((background) DISPOSE_BACKGROUND)
            ((previous) DISPOSE_PREVIOUS)
-           (else (abort (unknown-disposal-error block 'graphics-control-block->data)))))
+           (else => (lambda (disposal) (abort (unknown-disposal-error disposal 'graphics-control-block->data))))))
         (user-input? (graphics-control-block-user-input? block))
         (transparency-index? (and (graphics-control-block-transparency-index block) #t))
         (delay-time (graphics-control-block-delay block))

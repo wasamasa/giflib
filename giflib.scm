@@ -4,7 +4,7 @@
    gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!
    gif-color-map gif-color-map-set! create-color-map color-map? color-map-resolution color-map-sorted?
    color-map-count color-map-ref color-map-set! color-map-set*! color-map-for-each color-map-for-each-indexed
-   color? create-color create-color*
+   color? create-color
    color-red color-red-set! color-green color-green-set! color-blue color-blue-set!
    gif-append-extension-block! gif-extension-block-count gif-extension-block-ref gif-extension-block-for-each gif-extension-block-for-each-indexed gif-extension-blocks gif-metadata
    gif-frame-count gif-frame-ref gif-frame-for-each gif-frame-for-each-indexed
@@ -136,8 +136,7 @@
 
 (define free-GifFileType-ExtensionBlocks (foreign-lambda* void (((c-pointer (struct "GifFileType")) gif)) "GifFreeExtensions(&(gif->ExtensionBlockCount), &(gif->ExtensionBlocks));"))
 
-(define create-GifColorType (foreign-lambda* (c-pointer (struct "GifColorType")) () "C_return(malloc(sizeof(GifColorType)));"))
-(define create-GifColorType* (foreign-lambda* (c-pointer (struct "GifColorType")) ((unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "GifColorType *color = malloc(sizeof(GifColorType)); color->Red = red; color->Green = green; color->Blue = blue; C_return(color);"))
+(define create-GifColorType (foreign-lambda* (c-pointer (struct "GifColorType")) ((unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "GifColorType *color = malloc(sizeof(GifColorType)); color->Red = red; color->Green = green; color->Blue = blue; C_return(color);"))
 (define free-GifColorType (foreign-lambda* void (((c-pointer (struct "GifColorType")) color)) "free(color);"))
 
 ;;; auxiliary records
@@ -468,11 +467,11 @@
 
 ;;; colors
 
-(define (create-color)
-  (set-finalizer! (make-color (create-GifColorType)) close-color))
-
-(define (create-color* red green blue)
-  (set-finalizer! (make-color (create-GifColorType* red green blue)) close-color))
+(define (create-color #!optional red green blue)
+  (let ((color (make-color (create-GifColorType (or red 0)
+                                                (or green 0)
+                                                (or blue 0)))))
+    (set-finalizer! color close-color)))
 
 (define (close-color color)
   (and-let* ((color* (color-pointer color)))

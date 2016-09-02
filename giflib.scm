@@ -19,7 +19,7 @@
 
 (import chicken scheme foreign)
 ;; TODO: make more use of srfi-1
-(use extras srfi-1 srfi-4 bitstring)
+(use extras srfi-1 srfi-4 bitstring lolevel)
 
 #> #include "gif_lib.h" <#
 
@@ -38,6 +38,8 @@
 (define DISPOSE_DO_NOT (foreign-value "DISPOSE_DO_NOT" unsigned-byte))
 (define DISPOSE_BACKGROUND (foreign-value "DISPOSE_BACKGROUND" unsigned-byte))
 (define DISPOSE_PREVIOUS (foreign-value "DISPOSE_PREVIOUS" unsigned-byte))
+
+;; TODO: typedefs
 
 ;;; foreign functions
 
@@ -137,9 +139,6 @@
 
 (define free-GifFileType-ExtensionBlocks (foreign-lambda* void (((c-pointer (struct "GifFileType")) gif)) "GifFreeExtensions(&(gif->ExtensionBlockCount), &(gif->ExtensionBlocks));"))
 
-(define create-GifColorType (foreign-lambda* (c-pointer (struct "GifColorType")) ((unsigned-byte red) (unsigned-byte green) (unsigned-byte blue)) "GifColorType *color = malloc(sizeof(GifColorType)); color->Red = red; color->Green = green; color->Blue = blue; C_return(color);"))
-(define free-GifColorType (foreign-lambda* void (((c-pointer (struct "GifColorType")) color)) "free(color);"))
-
 ;;; auxiliary records
 
 ;; TODO: define record printers
@@ -147,7 +146,7 @@
 (define-record gif mode pointer)
 (define-record frame raster-allocated? pointer)
 (define-record color-map pointer)
-(define-record color pointer)
+(define-record color storage)
 (define-record sub-block id data)
 (define-record comment-block text)
 (define-record graphics-control-block disposal user-input? delay transparency-index)
@@ -209,6 +208,7 @@
           (abort (giflib-error status 'create-gif))))))
 
 (define (slurp-gif gif)
+  ;; TODO: assert that gif has been slurped before doing any access
   (and-let* ((gif* (gif-pointer gif)))
     (when (= (DGifSlurp gif*) GIF_ERROR)
       (abort (giflib-error (GifFileType->Error gif*) 'slurp-gif)))))
@@ -463,16 +463,17 @@
 
 ;;; colors
 
-(define (create-color #!optional red green blue)
-  (let ((color (make-color (create-GifColorType (or red 0)
-                                                (or green 0)
-                                                (or blue 0)))))
-    (set-finalizer! color close-color)))
+(define (color-pointer color)
+  (make-locative (color-storage color)))
 
-(define (close-color color)
-  (and-let* ((color* (color-pointer color)))
-    (free-GifColorType color*)
-    (color-pointer-set! color #f)))
+(define GifColorType-size (foreign-type-size (struct "GifColorType")))
+
+(define (create-color #!optional red green blue)
+  (let* ((color (make-color (make-blob GifColorType-size)))
+         (color* (color-pointer color)))
+    ((foreign-lambda* void (((c-pointer (struct "GifColorType")) c) (unsigned-byte r) (unsigned-byte g) (unsigned-byte b))
+       "c->Red = r, c->Green = g, c->Blue = b;")
+     color* (or red 0) (or green 0) (or blue 0))))
 
 (define (color-red color)
   (and-let* ((color* (color-pointer color)))
@@ -937,5 +938,6 @@
                                     'block-run->metadata))))))
    (else (abort (metadata-error "Invalid extension block run" 'block-run->metadata)))))
 
+;; TODO: write a convenience predicate whether an image is animated
 
 )

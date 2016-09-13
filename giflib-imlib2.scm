@@ -5,13 +5,27 @@
 
 (import chicken scheme foreign)
 
+;; HACK: used for accessors only
+(define-record gif mode slurped? pointer)
+
 (use data-structures srfi-4 lolevel
      giflib (prefix imlib2 imlib2:))
 
-(define (decoding-error location message)
+(define (define-error location message . condition)
   (let ((base (make-property-condition 'exn 'location location 'message message))
-        (extra (make-property-condition 'decoding)))
+        (extra (apply make-property-condition condition)))
     (make-composite-condition base extra)))
+
+(define (decoding-error message location)
+  (define-error location message 'decoding))
+
+(define (usage-error message location)
+  (define-error location message 'usage))
+
+(define (assert-gif-slurped! gif location)
+  (when (and (eq? (gif-mode gif) 'read)
+             (not (gif-slurped? gif)))
+    (abort (usage-error "Gif not slurped yet" location))))
 
 (define (argb->uint32 a r g b)
   (bitwise-ior
@@ -62,21 +76,20 @@
                  (transparency-index (alist-ref 'transparency-index metadata))
                  (palette (if color-map (color-map->palette color-map transparency-index) #f)))
             (when (not palette)
-              (decoding-error location "No palette specified"))
+              (decoding-error "No palette specified" location))
             (when (> (+ l w) width)
-              (decoding-error location "Frame width overflow"))
+              (decoding-error "Frame width overflow" location))
             (when (> (+ t h) height)
-              (decoding-error location "Frame height overflow"))
+              (decoding-error "Frame height overflow" location))
             (when hole?
-              ;; TODO: introduce parameter to be less fussy about unknown disposal
-              (when (not disposal)
-                (decoding-error location "No disposal specified for empty pixels"))
+              (when (and (not disposal) (not (disposal-strategy)))
+                (decoding-error "No disposal specified for empty pixels" location))
               (if (eqv? disposal 'background)
                   (let ((bg (vector-ref palette bg-index)))
                     (set! data (make-u32vector size bg)))
                   (begin
                     (when (not last)
-                      (decoding-error location "No previous frame encountered"))
+                      (decoding-error "No previous frame encountered" location))
                     (set! data (subu32vector last 0 (u32vector-length last))))))
 
             (do ((y 0 (fx+ y 1)))
@@ -98,6 +111,7 @@
           acc))))
 
 (define (gif-imlib2-image-for-each gif proc)
+  (assert-gif-slurped! gif 'gif-imlib2-image-for-each)
   (%gif-imlib2-image-fold
    (lambda (image _acc)
      (proc image)
@@ -105,6 +119,7 @@
    #f gif 'gif-imlib2-image-for-each))
 
 (define (gif-imlib2-image-for-each-indexed gif proc)
+  (assert-gif-slurped! gif 'gif-imlib2-image-for-each-indexed)
   (%gif-imlib2-image-fold
    (lambda (image i)
      (proc image i)
@@ -113,6 +128,7 @@
   #f)
 
 (define (gif->imlib2-images gif)
+  (assert-gif-slurped! gif 'gif->imlib2-images)
   (reverse
    (%gif-imlib2-image-fold
     (lambda (image images)

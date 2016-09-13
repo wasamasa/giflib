@@ -152,7 +152,7 @@
 
 ;; TODO: define record printers
 
-(define-record gif mode pointer)
+(define-record gif mode slurped? pointer)
 (define-record frame raster-allocated? pointer)
 (define-record color-map pointer)
 (define-record color storage)
@@ -206,21 +206,21 @@
   (let-location ((status int 0))
     (let ((gif* (DGifOpenFileName filename (location status))))
       (if gif*
-          (set-finalizer! (make-gif 'read gif*) close-gif)
+          (set-finalizer! (make-gif 'read #f gif*) close-gif)
           (abort (giflib-error status 'open-gif))))))
 
 (define (create-gif filename #!optional overwrite?)
   (let-location ((status int 0))
     (let ((gif* (EGifOpenFileName filename (not overwrite?) (location status))))
       (if gif*
-          (set-finalizer! (make-gif 'write gif*) close-gif)
+          (set-finalizer! (make-gif 'write #f gif*) close-gif)
           (abort (giflib-error status 'create-gif))))))
 
 (define (slurp-gif gif)
-  ;; TODO: assert that gif has been slurped before doing any access
   (and-let* ((gif* (gif-pointer gif)))
-    (when (= (DGifSlurp gif*) GIF_ERROR)
-      (abort (giflib-error (GifFileType->Error gif*) 'slurp-gif)))))
+    (if (= (DGifSlurp gif*) GIF_ERROR)
+        (abort (giflib-error (GifFileType->Error gif*) 'slurp-gif))
+        (gif-slurped?-set! gif #t))))
 
 (define (spew-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
@@ -244,9 +244,15 @@
 
 ;;; gifs
 
+(define (assert-gif-slurped! gif location)
+  (when (and (eq? (gif-mode gif) 'read)
+             (not (gif-slurped? gif)))
+    (abort (usage-error "Gif not slurped yet" location))))
+
 ;; TODO: define SRFI-17 setters
 
 (define (gif-width gif)
+  (assert-gif-slurped! gif 'gif-width)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SWidth gif*)))
 
@@ -255,6 +261,7 @@
     (GifFileType->SWidth-set! gif* width)))
 
 (define (gif-height gif)
+  (assert-gif-slurped! gif 'gif-height)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SHeight gif*)))
 
@@ -263,6 +270,7 @@
     (GifFileType->SHeight-set! gif* height)))
 
 (define (gif-resolution gif)
+  (assert-gif-slurped! gif 'gif-resolution)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SColorResolution gif*)))
 
@@ -273,6 +281,7 @@
         (abort (interval-error resolution 1 8 'gif-resolution-set!)))))
 
 (define (gif-bg-index gif)
+  (assert-gif-slurped! gif 'gif-bg-index)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SBackGroundColor gif*)))
 
@@ -291,6 +300,7 @@
   (inexact->exact (floor (- (* aspect-ratio 64) 15))))
 
 (define (gif-aspect-ratio gif)
+  (assert-gif-slurped! gif 'gif-aspect-ratio)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((aspect-byte (GifFileType->AspectByte gif*)))
       (if (zero? aspect-byte)
@@ -316,6 +326,7 @@
                               'gif-aspect-ratio-set!))))))
 
 (define (gif-color-map gif)
+  (assert-gif-slurped! gif 'gif-color-map)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((color-map* (GifFileType->SColorMap gif*)))
       (if color-map*
@@ -341,10 +352,12 @@
                              'gif-append-extension-block!))))))
 
 (define (gif-extension-block-count gif)
+  (assert-gif-slurped! gif 'gif-extension-block-count)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->ExtensionBlockCount gif*)))
 
 (define (gif-extension-block-ref gif index)
+  (assert-gif-slurped! gif 'gif-extension-block-ref)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (if (and (>= index 0) (< index count))
@@ -353,6 +366,7 @@
           (abort (oob-error index count 'gif-extension-block-ref))))))
 
 (define (gif-extension-block-for-each proc gif)
+  (assert-gif-slurped! gif 'gif-extension-block-for-each)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0))
@@ -362,6 +376,7 @@
             (loop (add1 i))))))))
 
 (define (gif-extension-block-for-each-indexed proc gif)
+  (assert-gif-slurped! gif 'gif-extension-block-for-each-indexed)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0))
@@ -371,6 +386,7 @@
             (loop (add1 i))))))))
 
 (define (gif-extension-blocks gif)
+  (assert-gif-slurped! gif 'gif-extension-blocks)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0) (acc '()))
@@ -381,16 +397,19 @@
             (reverse acc))))))
 
 (define (gif-metadata gif)
+  (assert-gif-slurped! gif 'gif-metadata)
   (let ((blocks (gif-extension-blocks gif)))
     (if (null? blocks)
         #f
         (append-map block-run->metadata (chunk-extension-blocks blocks)))))
 
 (define (gif-frame-count gif)
+  (assert-gif-slurped! gif 'gif-frame-count)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->ImageCount gif*)))
 
 (define (gif-frame-ref gif index)
+  (assert-gif-slurped! gif 'gif-frame-ref)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (if (and (>= index 0) (< index count))
@@ -398,6 +417,7 @@
           (abort (oob-error index count 'gif-frame-ref))))))
 
 (define (gif-frame-for-each proc gif)
+  (assert-gif-slurped! gif 'gif-frame-for-each)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))
@@ -406,6 +426,7 @@
           (loop (add1 i)))))))
 
 (define (gif-frame-for-each-indexed proc gif)
+  (assert-gif-slurped! gif 'gif-frame-for-indexed)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))

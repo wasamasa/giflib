@@ -434,6 +434,8 @@
           (proc (make-frame #t (GifFileType->SavedImage gif* i)) i)
           (loop (add1 i)))))))
 
+;; TODO: gif-frames
+
 ;;; color maps
 
 (define (create-color-map size #!optional color-map)
@@ -490,6 +492,8 @@
       (when (< i count)
         (proc (make-color (ColorMapObject->Color color-map* i)) i)
         (loop (add1 i))))))
+
+;; TODO: color-map-colors
 
 ;;; colors
 

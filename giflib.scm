@@ -224,7 +224,8 @@
 
 (define (spew-gif gif)
   (and-let* ((gif* (gif-pointer gif)))
-    ;; TODO: sanity checks (like frame dimensions)
+    ;; TODO: sanity checks (like frame dimensions as these cannot be
+    ;; completely checked when setting)
     (when (= (EGifSpew gif*) GIF_ERROR)
       (abort (giflib-error (GifFileType->Error gif*) 'spew-gif)))
     ;; spewing closes the gif...
@@ -597,7 +598,6 @@
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
 
-;; TODO: shouldn't this be smaller than the frame width?
 (define (frame-left-set! frame left)
   (if (not (negative? left))
       (SavedImage->Left-set! (frame-pointer frame) left)
@@ -608,7 +608,6 @@
 (define (frame-top frame)
   (SavedImage->Top (frame-pointer frame)))
 
-;; TODO: see above
 (define (frame-top-set! frame top)
   (if (not (negative? top))
       (SavedImage->Top-set! (frame-pointer frame) top)

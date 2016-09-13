@@ -249,8 +249,6 @@
              (not (gif-slurped? gif)))
     (abort (usage-error "Gif not slurped yet" location))))
 
-;; TODO: define SRFI-17 setters
-
 (define (gif-width gif)
   (assert-gif-slurped! gif 'gif-width)
   (and-let* ((gif* (gif-pointer gif)))
@@ -260,6 +258,8 @@
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SWidth-set! gif* width)))
 
+(define gif-width (getter-with-setter gif-width gif-width-set!))
+
 (define (gif-height gif)
   (assert-gif-slurped! gif 'gif-height)
   (and-let* ((gif* (gif-pointer gif)))
@@ -268,6 +268,8 @@
 (define (gif-height-set! gif height)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SHeight-set! gif* height)))
+
+(define gif-height (getter-with-setter gif-height gif-height-set!))
 
 (define (gif-resolution gif)
   (assert-gif-slurped! gif 'gif-resolution)
@@ -280,6 +282,8 @@
         (GifFileType->SColorResolution-set! gif* resolution)
         (abort (interval-error resolution 1 8 'gif-resolution-set!)))))
 
+(define gif-resolution (getter-with-setter gif-resolution gif-resolution-set!))
+
 (define (gif-bg-index gif)
   (assert-gif-slurped! gif 'gif-bg-index)
   (and-let* ((gif* (gif-pointer gif)))
@@ -290,6 +294,8 @@
     (if (and (>= bg-index 0) (< bg-index 256))
         (GifFileType->SBackGroundColor-set! gif* bg-index)
         (abort (interval-error bg-index 0 255 'gif-bg-index-set!)))))
+
+(define gif-bg-index (getter-with-setter gif-bg-index gif-bg-index-set!))
 
 (define epsilon 1e-6)
 
@@ -325,6 +331,8 @@
      (else (abort (type-error aspect-ratio "number or #f"
                               'gif-aspect-ratio-set!))))))
 
+(define gif-aspect-ratio (getter-with-setter gif-aspect-ratio gif-aspect-ratio-set!))
+
 (define (gif-color-map gif)
   (assert-gif-slurped! gif 'gif-color-map)
   (and-let* ((gif* (gif-pointer gif)))
@@ -337,6 +345,8 @@
   (and-let* ((gif* (gif-pointer gif))
              (color-map* (color-map-pointer color-map)))
     (GifFileType->SColorMap-set! gif* color-map*)))
+
+(define gif-color-map (getter-with-setter gif-color-map gif-color-map-set!))
 
 (define (gif-append-extension-block! gif block)
   (and-let* ((gif* (gif-pointer gif)))
@@ -473,6 +483,8 @@
              (color* (color-pointer color)))
     (ColorMapObject->Color-set! color-map* index color*)))
 
+(define color-map-ref (getter-with-setter color-map-ref color-map-set!))
+
 (define (color-map-set*! color-map index red green blue)
   (and-let* ((color-map* (color-map-pointer color-map)))
     (ColorMapObject->Color-set*! color-map* index red green blue)))
@@ -517,6 +529,8 @@
   (and-let* ((color* (color-pointer color)))
     (GifColorType->Red-set! color* red)))
 
+(define color-red (getter-with-setter color-red color-red-set!))
+
 (define (color-green color)
   (and-let* ((color* (color-pointer color)))
     (GifColorType->Green color*)))
@@ -525,6 +539,8 @@
   (and-let* ((color* (color-pointer color)))
     (GifColorType->Green-set! color* green)))
 
+(define color-green (getter-with-setter color-green color-green-set!))
+
 (define (color-blue color)
   (and-let* ((color* (color-pointer color)))
     (GifColorType->Blue color*)))
@@ -532,6 +548,8 @@
 (define (color-blue-set! color blue)
   (and-let* ((color* (color-pointer color)))
     (GifColorType->Blue-set! color* blue)))
+
+(define color-blue (getter-with-setter color-blue color-blue-set!))
 
 ;;; frames
 
@@ -557,6 +575,8 @@
             (frame-raster-allocated?-set! frame #t)))
         (abort (type-error width "positive width" 'frame-width-set!)))))
 
+(define frame-width (getter-with-setter frame-width frame-width-set!))
+
 (define (frame-height frame)
   (SavedImage->Height (frame-pointer frame)))
 
@@ -572,27 +592,37 @@
             (frame-raster-allocated?-set! frame #t)))
         (abort (type-error height "positive height" 'frame-height-set!)))))
 
+(define frame-height (getter-with-setter frame-height frame-height-set!))
+
 (define (frame-left frame)
   (SavedImage->Left (frame-pointer frame)))
 
+;; TODO: shouldn't this be smaller than the frame width?
 (define (frame-left-set! frame left)
   (if (not (negative? left))
       (SavedImage->Left-set! (frame-pointer frame) left)
       (abort (type-error left "non-negative left" 'frame-left-set!))))
 
+(define frame-left (getter-with-setter frame-left frame-left-set!))
+
 (define (frame-top frame)
   (SavedImage->Top (frame-pointer frame)))
 
+;; TODO: see above
 (define (frame-top-set! frame top)
   (if (not (negative? top))
       (SavedImage->Top-set! (frame-pointer frame) top)
       (abort (type-error top "non-negative top" 'frame-top-set!))))
+
+(define frame-top (getter-with-setter frame-top frame-top-set!))
 
 (define (frame-interlaced? frame)
   (SavedImage->Interlace (frame-pointer frame)))
 
 (define (frame-interlaced?-set! frame interlaced?)
   (SavedImage->Interlace-set! (frame-pointer frame) interlaced?))
+
+(define frame-interlaced? (getter-with-setter frame-interlaced? frame-interlaced?-set!))
 
 (define (frame-color-map frame)
   (let ((color-map* (SavedImage->ColorMap (frame-pointer frame))))
@@ -604,6 +634,8 @@
   (and-let* ((frame* (frame-pointer frame))
              (color-map* (color-map-pointer color-map)))
     (SavedImage->ColorMap-set! frame* color-map*)))
+
+(define frame-color-map (getter-with-setter frame-color-map frame-color-map-set!))
 
 (define (frame-pixel frame x y)
   (let* ((frame* (frame-pointer frame))
@@ -626,6 +658,8 @@
         (SavedImage->pixel-set! frame* width x y index)
         (abort (oob-error (format "~a|~a" x y) (format "~ax~a" width height)
                           'frame-pixel-set!)))))
+
+(define frame-pixel (getter-with-setter frame-pixel frame-pixel-set!))
 
 (define (frame-row frame index)
   (let* ((frame* (frame-pointer frame))
@@ -650,6 +684,8 @@
     (when (not (= row-length width))
       (abort (type-error row-length "correct length" 'frame-row-set!)))
     (SavedImage->row-set! frame* row width index)))
+
+(define frame-row (getter-with-setter frame-row frame-row-set!))
 
 (define (frame-rows frame)
   (let* ((frame* (frame-pointer frame))
@@ -681,6 +717,8 @@
           (SavedImage->row-set! frame* row width i)
           (loop (add1 i)))))))
 
+(define frame-rows (getter-with-setter frame-rows frame-rows-set!))
+
 (define (frame-pixels frame)
   (let* ((frame* (frame-pointer frame))
          (width (SavedImage->Width frame*))
@@ -701,6 +739,8 @@
     (when (not (= pixels-length size))
       (abort (type-error size "correct length" 'frame-pixels-set!)))
     (SavedImage->pixels-set! frame* pixels size)))
+
+(define frame-pixels (getter-with-setter frame-pixels frame-pixels-set!))
 
 (define (frame-append-extension-block! frame block)
   (let* ((data (specialized-block->data block))

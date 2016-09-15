@@ -18,7 +18,6 @@
    application-block? make-application-block application-block-identifier application-block-auth-code)
 
 (import chicken scheme foreign)
-;; TODO: make more use of srfi-1
 (use extras srfi-1 srfi-4 bitstring lolevel)
 
 #> #include "gif_lib.h" <#
@@ -155,7 +154,7 @@
 (define-record gif mode slurped? pointer)
 (define-record frame raster-allocated? pointer)
 (define-record color-map pointer)
-(define-record color storage)
+(define-record color pointer)
 (define-record sub-block id data)
 (define-record comment-block text)
 (define-record graphics-control-block disposal user-input? delay transparency-index)
@@ -510,13 +509,10 @@
 
 ;;; colors
 
-(define (color-pointer color)
-  (make-locative (color-storage color)))
-
 (define GifColorType-size (foreign-type-size (struct "GifColorType")))
 
 (define (create-color #!optional red green blue)
-  (let* ((color (make-color (make-blob GifColorType-size)))
+  (let* ((color (make-color (make-locative (make-blob GifColorType-size))))
          (color* (color-pointer color)))
     ((foreign-lambda* void ((GifColorType* c) (uint8 r) (uint8 g) (uint8 b))
        "c->Red = r, c->Green = g, c->Blue = b;")

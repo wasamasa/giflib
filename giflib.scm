@@ -149,12 +149,43 @@
 
 ;;; auxiliary records
 
-;; TODO: define record printers
+(define (format-pointer pointer)
+  (if pointer
+      (sprintf "0x~x" (pointer->address pointer))
+      "NULL"))
 
 (define-record gif mode slurped? pointer)
+(define-record-printer (gif g out)
+  (if (or (and (eq? (gif-mode g) 'read)
+               (not (gif-slurped? g)))
+          (not (gif-width g))
+          (not (gif-height g)))
+      (fprintf out "#<gif unknown size ~a>"
+               (format-pointer (gif-pointer g)))
+      (fprintf out "#<gif ~ax~a ~af ~a>"
+               (gif-width g) (gif-height g)
+               (gif-frame-count g)
+               (format-pointer (gif-pointer g)))))
+
 (define-record frame raster-allocated? pointer)
+(define-record-printer (frame f out)
+  (fprintf out "#<frame ~a|~a ~ax~a ~a>"
+           (frame-left f) (frame-top f)
+           (frame-width f) (frame-height f)
+           (format-pointer (frame-pointer f))))
+
 (define-record color-map pointer)
+(define-record-printer (color-map c out)
+  (fprintf out "#<color-map ~ac ~a>"
+           (color-map-count c)
+           (format-pointer (color-map-pointer c))))
+
 (define-record color pointer)
+(define-record-printer (color c out)
+  (fprintf out "#<color ~a|~a|~a ~a>"
+           (color-red c) (color-green c) (color-blue c)
+           (format-pointer (color-pointer c))))
+
 (define-record sub-block id data)
 (define-record comment-block text)
 (define-record graphics-control-block disposal user-input? delay transparency-index)

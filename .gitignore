@@ -1,2 +1,2 @@
-giflib.import.scm
+*.import.scm
 *.so

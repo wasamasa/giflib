@@ -26,7 +26,9 @@
 (define-foreign-type GifFileType* (nonnull-c-pointer (struct "GifFileType")))
 (define-foreign-type ColorMapObject* (nonnull-c-pointer (struct "ColorMapObject")))
 (define-foreign-type GifColorType* (nonnull-c-pointer (struct "GifColorType")))
+(define-foreign-type nullable-GifColorType* (c-pointer (struct "GifColorType")))
 (define-foreign-type SavedImage* (nonnull-c-pointer (struct "SavedImage")))
+(define-foreign-type nullable-SavedImage* (c-pointer (struct "SavedImage")))
 (define-foreign-type ExtensionBlock* (nonnull-c-pointer (struct "ExtensionBlock")))
 (define-foreign-type ExtensionBlock** (nonnull-c-pointer (nonnull-c-pointer (struct "ExtensionBlock"))))
 
@@ -63,9 +65,9 @@
 (define EGifCloseFile (foreign-lambda int "EGifCloseFile" GifFileType* int*))
 
 ;; gifalloc.c
-(define GifMakeMapObject (foreign-lambda ColorMapObject* "GifMakeMapObject" int (const GifColorType*)))
+(define GifMakeMapObject (foreign-lambda ColorMapObject* "GifMakeMapObject" int (const nullable-GifColorType*)))
 (define GifFreeMapObject (foreign-lambda void "GifFreeMapObject" ColorMapObject*))
-(define GifMakeSavedImage (foreign-lambda SavedImage* "GifMakeSavedImage" GifFileType* (const SavedImage*)))
+(define GifMakeSavedImage (foreign-lambda SavedImage* "GifMakeSavedImage" GifFileType* (const nullable-SavedImage*)))
 (define GifFreeSavedImages (foreign-lambda void "GifFreeSavedImages" GifFileType*))
 (define GifAddExtensionBlock (foreign-lambda int "GifAddExtensionBlock" int* ExtensionBlock** int unsigned-int u8vector))
 

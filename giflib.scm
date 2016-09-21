@@ -566,7 +566,8 @@
          (color* (color-pointer color)))
     ((foreign-lambda* void ((GifColorType* c) (uint8 r) (uint8 g) (uint8 b))
        "c->Red = r, c->Green = g, c->Blue = b;")
-     color* (or red 0) (or green 0) (or blue 0))))
+     color* (or red 0) (or green 0) (or blue 0))
+    color))
 
 (define (color-red color)
   (and-let* ((color* (color-pointer color)))

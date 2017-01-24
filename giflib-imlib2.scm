@@ -107,6 +107,8 @@
             (let ((image (imlib2:image-create-using-copied-data
                           width height
                           (make-locative (u32vector->blob/shared data)))))
+              (when transparency-index
+                (imlib2:image-alpha-set! image #t))
               (loop (add1 i) image (kons image acc))))
           acc))))
 

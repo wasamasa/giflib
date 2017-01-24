@@ -24,7 +24,9 @@
 
 ;; typedefs
 (define-foreign-type GifFileType* (nonnull-c-pointer (struct "GifFileType")))
+(define-foreign-type nullable-GifFileType* (c-pointer (struct "GifFileType")))
 (define-foreign-type ColorMapObject* (nonnull-c-pointer (struct "ColorMapObject")))
+(define-foreign-type nullable-ColorMapObject* (c-pointer (struct "ColorMapObject")))
 (define-foreign-type GifColorType* (nonnull-c-pointer (struct "GifColorType")))
 (define-foreign-type nullable-GifColorType* (c-pointer (struct "GifColorType")))
 (define-foreign-type SavedImage* (nonnull-c-pointer (struct "SavedImage")))
@@ -55,14 +57,16 @@
 ;;; foreign functions
 
 ;; dgif_lib.c
-(define DGifOpenFileName (foreign-lambda GifFileType* "DGifOpenFileName" nonnull-c-string int*))
-(define DGifSlurp (foreign-lambda int "DGifSlurp" GifFileType*))
+(define DGifOpenFileName (foreign-lambda nullable-GifFileType* "DGifOpenFileName" nonnull-c-string int*))
+(define DGifOpen (foreign-safe-lambda nullable-GifFileType* "DGifOpen" c-pointer InputFunc* int*))
+(define DGifSlurp (foreign-safe-lambda int "DGifSlurp" GifFileType*))
 (define DGifCloseFile (foreign-lambda int "DGifCloseFile" GifFileType* int*))
 
 ;; egif_lib.c
-(define EGifOpenFileName (foreign-lambda GifFileType* "EGifOpenFileName" nonnull-c-string bool int*))
-(define EGifSpew (foreign-lambda int "EGifSpew" GifFileType*))
-(define EGifCloseFile (foreign-lambda int "EGifCloseFile" GifFileType* int*))
+(define EGifOpenFileName (foreign-lambda nullable-GifFileType* "EGifOpenFileName" nonnull-c-string bool int*))
+(define EGifOpen (foreign-lambda nullable-GifFileType* "EGifOpen" c-pointer OutputFunc* int*))
+(define EGifSpew (foreign-safe-lambda int "EGifSpew" GifFileType*))
+(define EGifCloseFile (foreign-safe-lambda int "EGifCloseFile" GifFileType* int*))
 
 ;; gifalloc.c
 (define GifMakeMapObject (foreign-lambda ColorMapObject* "GifMakeMapObject" int (const nullable-GifColorType*)))
@@ -87,7 +91,7 @@
 (define GifFileType->SBackGroundColor-set! (foreign-lambda* void ((GifFileType* gif) (int index)) "gif->SBackGroundColor = index;"))
 (define GifFileType->AspectByte (foreign-lambda* uint8 ((GifFileType* gif)) "C_return(gif->AspectByte);"))
 (define GifFileType->AspectByte-set! (foreign-lambda* void ((GifFileType* gif) (uint8 ratio)) "gif->AspectByte = ratio;"))
-(define GifFileType->SColorMap (foreign-lambda* ColorMapObject* ((GifFileType* gif)) "C_return(gif->SColorMap);"))
+(define GifFileType->SColorMap (foreign-lambda* nullable-ColorMapObject* ((GifFileType* gif)) "C_return(gif->SColorMap);"))
 (define GifFileType->SColorMap-set! (foreign-lambda* void ((GifFileType* gif) (ColorMapObject* color_map)) "gif->SColorMap = color_map;"))
 (define GifFileType->ImageCount (foreign-lambda* int ((GifFileType* gif)) "C_return(gif->ImageCount);"))
 (define GifFileType->SavedImage (foreign-lambda* SavedImage* ((GifFileType* gif) (int i)) "C_return(&(gif->SavedImages[i]));"))
@@ -102,6 +106,7 @@
 (define ColorMapObject->BitsPerPixel (foreign-lambda* int ((ColorMapObject* color_map)) "C_return(color_map->BitsPerPixel);"))
 (define ColorMapObject->SortFlag (foreign-lambda* bool ((ColorMapObject* color_map)) "C_return(color_map->SortFlag);"))
 (define ColorMapObject->SortFlag-set! (foreign-lambda* void ((ColorMapObject* color_map) (bool flag)) "color_map->SortFlag = flag;"))
+(define ColorMapObject->Colors (foreign-lambda* GifColorType* ((ColorMapObject* color_map)) "color_map->Colors;"))
 (define ColorMapObject->Color (foreign-lambda* GifColorType* ((ColorMapObject* color_map) (int i)) "C_return(&(color_map->Colors[i]));"))
 (define ColorMapObject->Color-set! (foreign-lambda* void ((ColorMapObject* color_map) (int i) (GifColorType* color)) "color_map->Colors[i] = *color;"))
 (define ColorMapObject->Color-set*! (foreign-lambda* void ((ColorMapObject* color_map) (int i) (uint8 red) (uint8 green) (uint8 blue)) "color_map->Colors[i] = (GifColorType) { red, green, blue };"))
@@ -131,7 +136,7 @@
 (define SavedImage->Top-set! (foreign-lambda* void ((SavedImage* frame) (int top)) "frame->ImageDesc.Top = top;"))
 (define SavedImage->Interlace (foreign-lambda* bool ((SavedImage* frame)) "C_return(frame->ImageDesc.Interlace);"))
 (define SavedImage->Interlace-set! (foreign-lambda* void ((SavedImage* frame) (bool interlace)) "frame->ImageDesc.Interlace = interlace;"))
-(define SavedImage->ColorMap (foreign-lambda* ColorMapObject* ((SavedImage* frame)) "C_return(frame->ImageDesc.ColorMap);"))
+(define SavedImage->ColorMap (foreign-lambda* nullable-ColorMapObject* ((SavedImage* frame)) "C_return(frame->ImageDesc.ColorMap);"))
 (define SavedImage->ColorMap-set! (foreign-lambda* void ((SavedImage* frame) (ColorMapObject* color_map)) "frame->ImageDesc.ColorMap = color_map;"))
 (define SavedImage->ExtensionBlockCount (foreign-lambda* int ((SavedImage* frame)) "C_return(frame->ExtensionBlockCount);"))
 (define SavedImage->ExtensionBlockCount* (foreign-lambda* int* ((SavedImage* frame)) "C_return(&(frame->ExtensionBlockCount));"))

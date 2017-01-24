@@ -110,7 +110,7 @@
               (loop (add1 i) image (kons image acc))))
           acc))))
 
-(define (gif-imlib2-image-for-each gif proc)
+(define (gif-imlib2-image-for-each proc gif)
   (assert-gif-slurped! gif 'gif-imlib2-image-for-each)
   (%gif-imlib2-image-fold
    (lambda (image _acc)
@@ -118,7 +118,7 @@
      #f)
    #f gif 'gif-imlib2-image-for-each))
 
-(define (gif-imlib2-image-for-each-indexed gif proc)
+(define (gif-imlib2-image-for-each-indexed proc gif)
   (assert-gif-slurped! gif 'gif-imlib2-image-for-each-indexed)
   (%gif-imlib2-image-fold
    (lambda (image i)

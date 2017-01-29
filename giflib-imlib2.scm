@@ -55,17 +55,17 @@
          (height (gif-height gif))
          (frame-count (gif-frame-count gif))
          (bg-index (gif-bg-index gif))
-         (size (* width height))
-
-         (last-x #f)
-         (last-y #f)
-         (last-w #f)
-         (last-h #f)
-         (last-data #f)
-         (last-disposal #f))
+         (size (* width height)))
     (let loop ((index 0)
                (image #f)
-               (acc knil))
+               (acc knil)
+
+               (last-x #f)
+               (last-y #f)
+               (last-w #f)
+               (last-h #f)
+               (last-disposal #f)
+               (last-data #f))
       (if (< index frame-count)
           (let* ((frame (gif-frame-ref gif index))
                  (local-color-map (frame-color-map frame))
@@ -113,20 +113,14 @@
                                       (vector-ref (the vector palette)
                                                   (u8vector-ref pixels pixels-index)))))))
 
-            (when (not (eq? disposal 'previous))
-              (set! last-data data))
-            (set! last-disposal disposal)
-            (set! last-x x)
-            (set! last-y y)
-            (set! last-w w)
-            (set! last-h h)
-
             (let ((image (imlib2:image-create-using-copied-data
                           width height
                           (make-locative (u32vector->blob/shared data)))))
               (when transparency-index
                 (imlib2:image-alpha-set! image #t))
-              (loop (add1 index) image (kons image acc))))
+              (loop (add1 index) image (kons image acc)
+                    x y w h disposal
+                    (if (not (eq? disposal 'previous)) data last-data))))
           acc))))
 
 (define (gif-imlib2-image-for-each proc gif)

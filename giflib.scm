@@ -58,15 +58,13 @@
 
 ;; dgif_lib.c
 (define DGifOpenFileName (foreign-lambda nullable-GifFileType* "DGifOpenFileName" nonnull-c-string int*))
-(define DGifOpen (foreign-safe-lambda nullable-GifFileType* "DGifOpen" c-pointer InputFunc* int*))
-(define DGifSlurp (foreign-safe-lambda int "DGifSlurp" GifFileType*))
+(define DGifSlurp (foreign-lambda int "DGifSlurp" GifFileType*))
 (define DGifCloseFile (foreign-lambda int "DGifCloseFile" GifFileType* int*))
 
 ;; egif_lib.c
 (define EGifOpenFileName (foreign-lambda nullable-GifFileType* "EGifOpenFileName" nonnull-c-string bool int*))
-(define EGifOpen (foreign-lambda nullable-GifFileType* "EGifOpen" c-pointer OutputFunc* int*))
-(define EGifSpew (foreign-safe-lambda int "EGifSpew" GifFileType*))
-(define EGifCloseFile (foreign-safe-lambda int "EGifCloseFile" GifFileType* int*))
+(define EGifSpew (foreign-lambda int "EGifSpew" GifFileType*))
+(define EGifCloseFile (foreign-lambda int "EGifCloseFile" GifFileType* int*))
 
 ;; gifalloc.c
 (define GifMakeMapObject (foreign-lambda ColorMapObject* "GifMakeMapObject" int (const nullable-GifColorType*)))

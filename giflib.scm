@@ -33,6 +33,8 @@
 (define-foreign-type nullable-SavedImage* (c-pointer (struct "SavedImage")))
 (define-foreign-type ExtensionBlock* (nonnull-c-pointer (struct "ExtensionBlock")))
 (define-foreign-type ExtensionBlock** (nonnull-c-pointer (nonnull-c-pointer (struct "ExtensionBlock"))))
+(define-foreign-type InputFunc* (function int (GifFileType* (c-pointer unsigned-char) int)))
+(define-foreign-type OutputFunc* (function int (GifFileType* (const (c-pointer unsigned-char)) int)))
 
 (define-foreign-type int* (nonnull-c-pointer int))
 (define-foreign-type uint8* (nonnull-c-pointer unsigned-byte))

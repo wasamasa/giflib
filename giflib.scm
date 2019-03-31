@@ -495,7 +495,8 @@
 
 (define (create-color-map size #!optional color-map)
   (if (and (>= size 0) (<= size 255))
-      (let ((color-map* (if color-map (color-map-pointer color-map) #f)))
+      ;; TODO: test whether optional argument works
+      (let ((color-map* (if color-map (ColorMapObject->Colors (color-map-pointer color-map)) #f)))
         (set-finalizer! (make-color-map (GifMakeMapObject size color-map*)) close-color-map))
       (abort (interval-error size 0 255 'create-color-map))))
 

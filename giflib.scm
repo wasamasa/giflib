@@ -17,7 +17,23 @@
    text-block? make-text-block text-block-grid-left text-block-grid-top text-block-grid-width text-block-grid-height text-block-cell-width text-block-cell-height text-block-fg-index text-block-bg-index
    application-block? make-application-block application-block-identifier application-block-auth-code)
 
-  (import chicken scheme foreign)
-  (use extras srfi-1 srfi-4 bitstring lolevel)
+  (import scheme)
+  (cond-expand
+   (chicken-4
+    (import chicken foreign)
+    (use extras srfi-1 srfi-4 bitstring lolevel))
+   (chicken-5
+    (import (chicken base))
+    (import (chicken blob))
+    (import (chicken condition))
+    (import (chicken foreign))
+    (import (chicken format))
+    (import (chicken gc))
+    (import (chicken memory))
+    (import (chicken locative))
+    (import (srfi 1))
+    (import (srfi 4))
+    (import bitstring)
+    (import miscmacros)))
 
   (include "giflib-impl.scm"))

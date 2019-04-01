@@ -1,9 +1,21 @@
-(use (only ports with-output-to-port)
-     (rename format (format cl-format))
-     (only srfi-1 append-map)
-     (only posix directory? find-files)
-     getopt-long
-     giflib)
+(import scheme)
+(cond-expand
+ (chicken-4
+  (use ports srfi-1 posix
+       (rename format (format cl-format)) getopt-long giflib))
+ (chicken-5
+  (import (chicken condition))
+  (import (chicken file))
+  (import (chicken file posix))
+  (import (chicken format))
+  (import (chicken port))
+  (import (chicken process-context))
+  (import (srfi 1))
+  (import (srfi 4))
+  (import (srfi 13))
+  (import (rename format (format cl-format)))
+  (import getopt-long)
+  (import giflib)))
 
 (define (color->hex color)
   (let ((red (color-red color))
@@ -162,13 +174,12 @@
           (condition-case
            (getopt-long (command-line-arguments) options)
            (e (exn)
-              (error-message
-               (print-error
-                (format "Error: ~a: ~a\n"
-                        ((condition-property-accessor 'exn 'message) e)
-                        ((condition-property-accessor 'exn 'arguments) e))
-                usage-hint (usage options))
-               (exit 1)))))
+              (print-error
+               (format "Error: ~a: ~a\n"
+                       ((condition-property-accessor 'exn 'message) e)
+                       ((condition-property-accessor 'exn 'arguments) e))
+               usage-hint (usage options))
+              (exit 1))))
          (help? (alist-ref 'help opts))
          (verbosity (count (lambda (item) (eqv? (car item) 'verbose)) opts))
          (args (alist-ref '@ opts)))

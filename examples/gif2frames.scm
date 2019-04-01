@@ -1,4 +1,14 @@
-(use giflib giflib-imlib2 imlib2 srfi-13)
+(import scheme)
+(cond-expand
+ (chicken-4
+  (use giflib giflib-imlib2 imlib2 srfi-13))
+ (chicken-5
+  (import (chicken format))
+  (import (chicken process-context))
+  (import (srfi 13))
+  (import giflib)
+  (import giflib-imlib2)
+  (import imlib2)))
 
 (let* ((input-file (car (command-line-arguments)))
        (gif (open-gif input-file)))

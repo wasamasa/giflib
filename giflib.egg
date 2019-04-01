@@ -1,0 +1,12 @@
+((synopsis "Bindings to giflib")
+ (author "Vasilij Schneidermann")
+ (license "MIT")
+ (category graphics)
+ (dependencies srfi-1 miscmacros bitstring imlib2)
+ (foreign-dependencies "giflib-5.0")
+ (component-options (link-options "-L" "-lgif"))
+ (components (extension giflib
+                        (csc-options "-O3" "-d1"))
+             (extension giflib-imlib2
+                        (component-dependencies giflib)
+                        (csc-options "-O4" "-d1"))))

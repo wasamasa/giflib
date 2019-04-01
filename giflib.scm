@@ -1,5 +1,6 @@
 (module giflib
-  (disposal-strategy
+  (%define-error %assert-gif-slurped!
+   disposal-strategy
    gif? open-gif create-gif slurp-gif spew-gif close-gif
    gif-width gif-height gif-resolution gif-bg-index gif-aspect-ratio
    gif-width-set! gif-height-set! gif-resolution-set! gif-bg-index-set! gif-aspect-ratio-set!

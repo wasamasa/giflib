@@ -177,41 +177,41 @@
 
 ;;; errors
 
-(define (define-error location message . condition)
+(define (%define-error location message . condition)
   (let ((base (make-property-condition 'exn 'location location 'message message))
         (extra (apply make-property-condition condition)))
     (make-composite-condition base extra)))
 
 (define (giflib-error status location)
-  (define-error location (GifErrorString status) 'giflib 'code status))
+  (%define-error location (GifErrorString status) 'giflib 'code status))
 
 (define (oob-error index count location)
-  (define-error location (format "Out of bounds: ~a / ~a" index count) 'bounds))
+  (%define-error location (format "Out of bounds: ~a / ~a" index count) 'bounds))
 
 (define (interval-error value lower-bound upper-bound location)
-  (define-error location (format "Value ~a outside interval [~a ~a]"
+  (%define-error location (format "Value ~a outside interval [~a ~a]"
                                  value lower-bound upper-bound) 'range))
 
 (define (type-error value expected location)
-  (define-error location (format "Bad argument type - not a ~a: ~a"
+  (%define-error location (format "Bad argument type - not a ~a: ~a"
                                  expected value) 'type))
 
 (define (unknown-extension-block-error location)
-  (define-error location "Unknown extension block" 'match))
+  (%define-error location "Unknown extension block" 'match))
 
 (define disposal-strategy (make-parameter #f))
 
 (define (unknown-disposal-error disposal location)
-  (define-error location (format "Unknown disposal ~a" disposal) 'match))
+  (%define-error location (format "Unknown disposal ~a" disposal) 'match))
 
 (define (unpack-error location)
-  (define-error location "Unpacking error" 'match))
+  (%define-error location "Unpacking error" 'match))
 
 (define (usage-error message location)
-  (define-error location message 'usage))
+  (%define-error location message 'usage))
 
 (define (metadata-error message location)
-  (define-error location message 'metadata))
+  (%define-error location message 'metadata))
 
 ;;; setting up and tearing down gifs
 
@@ -264,13 +264,13 @@
 
 ;;; gifs
 
-(define (assert-gif-slurped! gif location)
+(define (%assert-gif-slurped! gif location)
   (when (and (eq? (gif-mode gif) 'read)
              (not (gif-slurped? gif)))
     (abort (usage-error "Gif not slurped yet" location))))
 
 (define (gif-width gif)
-  (assert-gif-slurped! gif 'gif-width)
+  (%assert-gif-slurped! gif 'gif-width)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SWidth gif*)))
 
@@ -281,7 +281,7 @@
 (define gif-width (getter-with-setter gif-width gif-width-set!))
 
 (define (gif-height gif)
-  (assert-gif-slurped! gif 'gif-height)
+  (%assert-gif-slurped! gif 'gif-height)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SHeight gif*)))
 
@@ -292,7 +292,7 @@
 (define gif-height (getter-with-setter gif-height gif-height-set!))
 
 (define (gif-resolution gif)
-  (assert-gif-slurped! gif 'gif-resolution)
+  (%assert-gif-slurped! gif 'gif-resolution)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SColorResolution gif*)))
 
@@ -305,7 +305,7 @@
 (define gif-resolution (getter-with-setter gif-resolution gif-resolution-set!))
 
 (define (gif-bg-index gif)
-  (assert-gif-slurped! gif 'gif-bg-index)
+  (%assert-gif-slurped! gif 'gif-bg-index)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->SBackGroundColor gif*)))
 
@@ -326,7 +326,7 @@
   (inexact->exact (floor (- (* aspect-ratio 64) 15))))
 
 (define (gif-aspect-ratio gif)
-  (assert-gif-slurped! gif 'gif-aspect-ratio)
+  (%assert-gif-slurped! gif 'gif-aspect-ratio)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((aspect-byte (GifFileType->AspectByte gif*)))
       (if (zero? aspect-byte)
@@ -354,7 +354,7 @@
 (define gif-aspect-ratio (getter-with-setter gif-aspect-ratio gif-aspect-ratio-set!))
 
 (define (gif-color-map gif)
-  (assert-gif-slurped! gif 'gif-color-map)
+  (%assert-gif-slurped! gif 'gif-color-map)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((color-map* (GifFileType->SColorMap gif*)))
       (if color-map*
@@ -382,12 +382,12 @@
                              'gif-append-extension-block!))))))
 
 (define (gif-extension-block-count gif)
-  (assert-gif-slurped! gif 'gif-extension-block-count)
+  (%assert-gif-slurped! gif 'gif-extension-block-count)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->ExtensionBlockCount gif*)))
 
 (define (gif-extension-block-ref gif index)
-  (assert-gif-slurped! gif 'gif-extension-block-ref)
+  (%assert-gif-slurped! gif 'gif-extension-block-ref)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (if (and (>= index 0) (< index count))
@@ -396,7 +396,7 @@
           (abort (oob-error index count 'gif-extension-block-ref))))))
 
 (define (gif-extension-block-for-each proc gif)
-  (assert-gif-slurped! gif 'gif-extension-block-for-each)
+  (%assert-gif-slurped! gif 'gif-extension-block-for-each)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0))
@@ -406,7 +406,7 @@
             (loop (add1 i))))))))
 
 (define (gif-extension-block-for-each-indexed proc gif)
-  (assert-gif-slurped! gif 'gif-extension-block-for-each-indexed)
+  (%assert-gif-slurped! gif 'gif-extension-block-for-each-indexed)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0))
@@ -416,7 +416,7 @@
             (loop (add1 i))))))))
 
 (define (gif-extension-blocks gif)
-  (assert-gif-slurped! gif 'gif-extension-blocks)
+  (%assert-gif-slurped! gif 'gif-extension-blocks)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ExtensionBlockCount gif*)))
       (let loop ((i 0) (acc '()))
@@ -427,19 +427,19 @@
             (reverse acc))))))
 
 (define (gif-metadata gif)
-  (assert-gif-slurped! gif 'gif-metadata)
+  (%assert-gif-slurped! gif 'gif-metadata)
   (let ((blocks (gif-extension-blocks gif)))
     (if (null? blocks)
         #f
         (append-map block-run->metadata (chunk-extension-blocks blocks)))))
 
 (define (gif-frame-count gif)
-  (assert-gif-slurped! gif 'gif-frame-count)
+  (%assert-gif-slurped! gif 'gif-frame-count)
   (and-let* ((gif* (gif-pointer gif)))
     (GifFileType->ImageCount gif*)))
 
 (define (gif-frame-ref gif index)
-  (assert-gif-slurped! gif 'gif-frame-ref)
+  (%assert-gif-slurped! gif 'gif-frame-ref)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (if (and (>= index 0) (< index count))
@@ -447,7 +447,7 @@
           (abort (oob-error index count 'gif-frame-ref))))))
 
 (define (gif-frame-for-each proc gif)
-  (assert-gif-slurped! gif 'gif-frame-for-each)
+  (%assert-gif-slurped! gif 'gif-frame-for-each)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))
@@ -456,7 +456,7 @@
           (loop (add1 i)))))))
 
 (define (gif-frame-for-each-indexed proc gif)
-  (assert-gif-slurped! gif 'gif-frame-for-indexed)
+  (%assert-gif-slurped! gif 'gif-frame-for-indexed)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((i 0))
@@ -465,7 +465,7 @@
           (loop (add1 i)))))))
 
 (define (gif-frames gif)
-  (assert-gif-slurped! gif 'gif-frames)
+  (%assert-gif-slurped! gif 'gif-frames)
   (and-let* ((gif* (gif-pointer gif)))
     (let ((count (GifFileType->ImageCount gif*)))
       (let loop ((frames '())

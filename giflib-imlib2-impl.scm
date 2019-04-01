@@ -1,21 +1,8 @@
-;; HACK: used for accessors only
-(define-record gif mode slurped? pointer)
-
-(define (define-error location message . condition)
-  (let ((base (make-property-condition 'exn 'location location 'message message))
-        (extra (apply make-property-condition condition)))
-    (make-composite-condition base extra)))
-
 (define (decoding-error message location)
-  (define-error location message 'decoding))
+  (%define-error location message 'decoding))
 
 (define (usage-error message location)
-  (define-error location message 'usage))
-
-(define (assert-gif-slurped! gif location)
-  (when (and (eq? (gif-mode gif) 'read)
-             (not (gif-slurped? gif)))
-    (abort (usage-error "Gif not slurped yet" location))))
+  (%define-error location message 'usage))
 
 (define (argb->uint32 a r g b)
   (bitwise-ior
@@ -114,7 +101,7 @@
           acc))))
 
 (define (gif-imlib2-image-for-each proc gif)
-  (assert-gif-slurped! gif 'gif-imlib2-image-for-each)
+  (%assert-gif-slurped! gif 'gif-imlib2-image-for-each)
   (%gif-imlib2-image-fold
    (lambda (image _acc)
      (proc image)
@@ -122,7 +109,7 @@
    #f gif 'gif-imlib2-image-for-each))
 
 (define (gif-imlib2-image-for-each-indexed proc gif)
-  (assert-gif-slurped! gif 'gif-imlib2-image-for-each-indexed)
+  (%assert-gif-slurped! gif 'gif-imlib2-image-for-each-indexed)
   (%gif-imlib2-image-fold
    (lambda (image i)
      (proc image i)
@@ -131,7 +118,7 @@
   #f)
 
 (define (gif->imlib2-images gif)
-  (assert-gif-slurped! gif 'gif->imlib2-images)
+  (%assert-gif-slurped! gif 'gif->imlib2-images)
   (reverse
    (%gif-imlib2-image-fold
     (lambda (image images)

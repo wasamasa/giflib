@@ -6,7 +6,9 @@
  (foreign-dependencies "giflib-5.0")
  (component-options (link-options "-L" "-lgif"))
  (components (extension giflib
+                        (source-dependencies "giflib-impl.scm")
                         (csc-options "-O3" "-d1"))
              (extension giflib-imlib2
                         (component-dependencies giflib)
+                        (source-dependencies "giflib-imlib2-impl.scm")
                         (csc-options "-O4" "-d1"))))

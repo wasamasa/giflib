@@ -3,6 +3,7 @@
  (chicken-4
   (use giflib giflib-imlib2 imlib2 srfi-13))
  (chicken-5
+  (import (chicken base))
   (import (chicken format))
   (import (chicken process-context))
   (import (srfi 13))

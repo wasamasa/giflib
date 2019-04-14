@@ -4,6 +4,7 @@
   (use ports srfi-1 posix
        (rename format (format cl-format)) getopt-long giflib))
  (chicken-5
+  (import (chicken base))
   (import (chicken condition))
   (import (chicken file))
   (import (chicken file posix))
